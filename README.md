@@ -1,19 +1,17 @@
 # invoice-ocr-poc
 
-Proof of concept HTTP API: upload a receipt, optionally preprocess, then call **only HTTP APIs**.
+Proof of concept HTTP API: upload a receipt image, enqueue processing, then poll SQLite-backed results.
 
-Default OCR in `.env.example` is **Ollama** (`glm-ocr:latest` via `POST /api/generate`). OpenRouter vision remains available.
-
-Then DeepSeek (OpenRouter) extracts line items and TypeSafe Jev judges type, routing, and risk.
+OCR is one of **Ollama** (`glm-ocr:latest`), **OpenRouter** vision, or local **Tesseract**. DeepSeek (OpenRouter) optionally extracts line items. TypeSafe Jev judges document type, routing, and risk.
 
 ## Architecture
 
-Upload returns as soon as the file is on disk and the invoice is queued. A worker pool runs preprocess, OCR, optional DeepSeek assist, and Jev. Results stay in SQLite. Structured logs go to stdout (`zap`); `LOG_FORMAT=json` is the scrape path for a later Grafana Loki collector.
+Upload returns as soon as the file is on disk and the invoice is queued. A worker pool runs preprocess, OCR, optional DeepSeek assist, and Jev. Results stay in SQLite. Logs go to stdout (`zap`).
 
 ```mermaid
 flowchart LR
   client[HTTP client] --> gin[Gin API]
-  gin -->|"POST /image/processor"| svc[invoice.Service]
+  gin -->|"POST /api/v1/image/processor"| svc[invoice.Service]
   svc --> disk[Upload files]
   svc --> db[(SQLite)]
   svc --> pool[worker.Pool]
@@ -27,33 +25,32 @@ flowchart LR
   parse --> assist[DeepSeek assist]
   assist --> jev[TypeSafe Jev]
   jev --> db
-  gin --> zap[zap stdout]
-  zap -.-> alloy[Alloy or Promtail]
-  alloy -.-> loki[Loki]
-  loki -.-> grafana[Grafana]
 ```
 
-`OCR_ENGINE` selects one OCR backend (`ollama`, `openrouter`, or `tesseract`). Assist is skipped when `OPENROUTER_API_KEY` is empty. Dashed edges are not wired in this PoC.
+`OCR_ENGINE` selects one OCR backend (`ollama`, `openrouter`, or `tesseract`). Assist is skipped when `OPENROUTER_API_KEY` is empty.
 
 ## Requirements
 
 - Go 1.27.1
-- Ollama with `glm-ocr:latest` (`ollama pull glm-ocr:latest`)
+- Ollama with `glm-ocr:latest` (`ollama pull glm-ocr:latest`) when `OCR_ENGINE=ollama`
 - `OPENROUTER_API_KEY` — optional structured extract (and OCR if `OCR_ENGINE=openrouter`)
 - `TYPESAFE_API_KEY` — Jev
+- Tesseract on `PATH` when `OCR_ENGINE=tesseract`
 - Optional: `go build -tags gocv` for OpenCV preprocess
 
 ## Run
 
 ```bash
-cp configs/.env.example .env
+cp configs/.env.example configs/.env
 # set OPENROUTER_API_KEY and TYPESAFE_API_KEY
 go run ./cmd/api
 ```
 
+Config is read from `.env` or `configs/.env`.
+
 `OCR_ENGINE=ollama` (example), `openrouter`, or `tesseract`.
 
-`LOG_FORMAT=text` (default, console) or `json` (stdout lines for a later Grafana Loki collector).
+`LOG_FORMAT=text` (default, console) or `json`.
 
 ## API
 
@@ -65,10 +62,10 @@ go run ./cmd/api
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/image/processor \
-  -F "image=@./receipt.png;type=image/png"
+  -F "image=@./path/to/receipt.png;type=image/png"
 ```
 
-Flow: preprocess → Ollama GLM-OCR (or OpenRouter) → DeepSeek JSON → Jev HTTP.
+Flow: preprocess → OCR (Ollama, OpenRouter, or Tesseract) → extract / optional DeepSeek → Jev HTTP.
 
 ## Accuracy harness
 
