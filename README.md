@@ -41,13 +41,12 @@ flowchart LR
 ## Run
 
 ```bash
-cd backend
 cp configs/.env.example configs/.env
 # set OPENROUTER_API_KEY and TYPESAFE_API_KEY
 go run ./cmd/api
 ```
 
-Config is read from `.env` or `configs/.env` (relative to the process working directory).
+Config is read from `.env` or `configs/.env`.
 
 `OCR_ENGINE=ollama` (example), `openrouter`, or `tesseract`.
 
@@ -71,6 +70,5 @@ Flow: preprocess → OCR (Ollama, OpenRouter, or Tesseract) → extract / option
 ## Accuracy harness
 
 ```bash
-cd backend
 go test -tags evaluation ./test/
 ```
