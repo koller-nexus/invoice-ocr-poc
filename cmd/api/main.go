@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"log/slog"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,25 +19,34 @@ import (
 	"github.com/williamkoller/tesseract-poc-go/internal/preprocess"
 	"github.com/williamkoller/tesseract-poc-go/internal/store"
 	"github.com/williamkoller/tesseract-poc-go/internal/worker"
+	"go.uber.org/zap"
 )
 
 func main() {
 	if err := run(); err != nil {
-		slog.Error("server exited", "err", err)
+		log := zap.Must(zap.NewProduction()).Sugar()
+		log.Errorw("server exited", "err", err)
+		_ = log.Sync()
 		os.Exit(1)
 	}
 }
 
-func newLogger(format string) *slog.Logger {
-	opts := &slog.HandlerOptions{Level: slog.LevelInfo}
-	var h slog.Handler
+func newLogger(format string) (*zap.SugaredLogger, error) {
+	var cfg zap.Config
 	if format == "json" {
-		h = slog.NewJSONHandler(os.Stdout, opts)
+		cfg = zap.NewProductionConfig()
 	} else {
-		h = slog.NewTextHandler(os.Stdout, opts)
+		cfg = zap.NewDevelopmentConfig()
 	}
 
-	return slog.New(h)
+	cfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+
+	logger, err := cfg.Build()
+	if err != nil {
+		return nil, fmt.Errorf("build logger: %w", err)
+	}
+
+	return logger.Sugar(), nil
 }
 
 func run() error {
@@ -46,8 +55,11 @@ func run() error {
 		return err
 	}
 
-	log := newLogger(cfg.LogFormat)
-	slog.SetDefault(log)
+	log, err := newLogger(cfg.LogFormat)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = log.Sync() }()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -65,16 +77,23 @@ func run() error {
 			APIKey:  cfg.OpenRouterAPIKey,
 			Model:   cfg.OpenRouterOCRModel,
 			Timeout: cfg.OpenRouterTimeout,
+			Log:     log,
 		},
 		Ollama: ocr.OllamaOptions{
 			BaseURL: cfg.OllamaURL,
 			Model:   cfg.OllamaOCRModel,
 			Timeout: cfg.OllamaTimeout,
+			Log:     log,
 		},
 	})
 	prep := preprocess.New()
 	judge := jev.NewClient(cfg.TypeSafeBaseURL, cfg.TypeSafeAPIKey, cfg.TypeSafeTimeout)
-	assist := openrouter.NewClient(cfg.OpenRouterBaseURL, cfg.OpenRouterAPIKey, cfg.OpenRouterModel, cfg.OpenRouterTimeout)
+	assist := openrouter.NewClient(
+		cfg.OpenRouterBaseURL,
+		cfg.OpenRouterAPIKey,
+		cfg.OpenRouterModel,
+		cfg.OpenRouterTimeout,
+	).WithLogger(log)
 
 	var svc *invoice.Service
 
@@ -105,7 +124,7 @@ func run() error {
 	errCh := make(chan error, 1)
 
 	go func() {
-		log.Info("listening", "addr", srv.Addr)
+		log.Infow("listening", "addr", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

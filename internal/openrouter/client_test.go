@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/williamkoller/tesseract-poc-go/internal/extract"
+	"go.uber.org/zap"
 )
 
 func TestAssist_ParsesItems(t *testing.T) {
@@ -74,5 +75,28 @@ func TestEnabled(t *testing.T) {
 
 	if NewClient("", "", "", 0).Enabled() {
 		t.Fatal("empty key should disable")
+	}
+}
+
+func TestClient_WithLogger(t *testing.T) {
+	t.Parallel()
+
+	var missing *Client
+	if missing.WithLogger(zap.NewNop().Sugar()) != nil {
+		t.Fatal("nil receiver should stay nil")
+	}
+
+	c := NewClient("", "", "", 0)
+	if c.WithLogger(nil) != c {
+		t.Fatal("nil logger should keep receiver")
+	}
+
+	log := zap.NewNop().Sugar()
+	if c.WithLogger(log) != c {
+		t.Fatal("logger should return receiver")
+	}
+
+	if c.log != log {
+		t.Fatal("logger not stored")
 	}
 }

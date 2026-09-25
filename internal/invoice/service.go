@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"mime"
 	"os"
 	"path/filepath"
@@ -20,6 +19,7 @@ import (
 	"github.com/williamkoller/tesseract-poc-go/internal/ocr"
 	"github.com/williamkoller/tesseract-poc-go/internal/preprocess"
 	"github.com/williamkoller/tesseract-poc-go/internal/store"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -55,17 +55,17 @@ type Service struct {
 	uploadDir string
 	maxBytes  int64
 	prep      preprocess.Preparer
-	log       *slog.Logger
+	log       *zap.SugaredLogger
 }
 
 // NewService constructs a Service.
-func NewService(st *store.Store, jobs Jobs, uploadDir string, maxBytes int64, prep preprocess.Preparer, log *slog.Logger) *Service {
+func NewService(st *store.Store, jobs Jobs, uploadDir string, maxBytes int64, prep preprocess.Preparer, log *zap.SugaredLogger) *Service {
 	if prep == nil {
 		prep = preprocess.New()
 	}
 
 	if log == nil {
-		log = slog.Default()
+		log = zap.NewNop().Sugar()
 	}
 
 	return &Service{
@@ -122,7 +122,7 @@ func (s *Service) Enqueue(ctx context.Context, in EnqueueInput) (*store.Invoice,
 	}
 
 	s.jobs.Enqueue(id)
-	s.log.Info("invoice queued",
+	s.log.Infow("invoice queued",
 		"step", "enqueue",
 		"invoice_id", id,
 		"mime", in.MIMEType,
@@ -158,7 +158,7 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 		return err
 	}
 
-	s.log.Info("job.start", "step", "job.start", "invoice_id", id)
+	s.log.Infow("job.start", "step", "job.start", "invoice_id", id)
 
 	inv.Status = store.StatusProcessing
 	if err := s.store.Update(ctx, inv); err != nil {
@@ -171,9 +171,9 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 		return s.fail(ctx, inv, fmt.Errorf("preprocess: %w", err))
 	}
 
-	s.log.Info("preprocess.done", "step", "preprocess.done", "invoice_id", id)
+	s.log.Infow("preprocess.done", "step", "preprocess.done", "invoice_id", id)
 
-	s.log.Info("ocr.start", "step", "ocr.start", "invoice_id", id, "engine", fmt.Sprintf("%T", engine))
+	s.log.Infow("ocr.start", "step", "ocr.start", "invoice_id", id, "engine", fmt.Sprintf("%T", engine))
 
 	ocrRes, err := engine.Recognize(ctx, imgPath)
 	if err != nil {
@@ -182,7 +182,7 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 
 	inv.OCRText = ocrRes.Text
 	inv.OCRConfidence = ocrRes.Confidence
-	s.log.Info("ocr.done",
+	s.log.Infow("ocr.done",
 		"step", "ocr.done",
 		"invoice_id", id,
 		"text_chars", len(ocrRes.Text),
@@ -190,7 +190,7 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 	)
 
 	parsed := extract.Parse(ocrRes.Text)
-	s.log.Info("extract.done",
+	s.log.Infow("extract.done",
 		"step", "extract.done",
 		"invoice_id", id,
 		"items", len(parsed.Items),
@@ -202,7 +202,7 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 		if aerr != nil {
 			inv.AssistNotes = "falha no apoio LLM: " + aerr.Error()
 			inv.AssistUsed = false
-			s.log.Error("assist.done",
+			s.log.Errorw("assist.done",
 				"step", "assist.done",
 				"invoice_id", id,
 				"model", inv.AssistModel,
@@ -216,7 +216,7 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 				parsed = improved
 			}
 
-			s.log.Info("assist.done",
+			s.log.Infow("assist.done",
 				"step", "assist.done",
 				"invoice_id", id,
 				"model", inv.AssistModel,
@@ -245,7 +245,8 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 
 	applyJudgment(inv, judgment)
 	inv.Status = store.StatusDone
-	s.log.Info("jev.done",
+
+	s.log.Infow("jev.done",
 		"step", "jev.done",
 		"invoice_id", id,
 		"document_type", judgment.DocumentType,
@@ -257,13 +258,13 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 		return err
 	}
 
-	s.log.Info("job.done", "step", "job.done", "invoice_id", id, "status", inv.Status)
+	s.log.Infow("job.done", "step", "job.done", "invoice_id", id, "status", inv.Status)
 
 	return nil
 }
 
 func (s *Service) fail(ctx context.Context, inv *store.Invoice, cause error) error {
-	s.log.Error("job.fail",
+	s.log.Errorw("job.fail",
 		"step", "job.fail",
 		"invoice_id", inv.ID,
 		"err", cause,

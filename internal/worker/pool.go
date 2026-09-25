@@ -3,8 +3,9 @@ package worker
 
 import (
 	"context"
-	"log/slog"
 	"sync"
+
+	"go.uber.org/zap"
 )
 
 // Handler processes one job id.
@@ -14,19 +15,19 @@ type Handler func(ctx context.Context, id string) error
 type Pool struct {
 	jobs    chan string
 	handler Handler
-	log     *slog.Logger
+	log     *zap.SugaredLogger
 	count   int
 	wg      sync.WaitGroup
 }
 
 // NewPool builds a pool with workerCount goroutines.
-func NewPool(workerCount int, handler Handler, log *slog.Logger) *Pool {
+func NewPool(workerCount int, handler Handler, log *zap.SugaredLogger) *Pool {
 	if workerCount < 1 {
 		workerCount = 1
 	}
 
 	if log == nil {
-		log = slog.Default()
+		log = zap.NewNop().Sugar()
 	}
 
 	return &Pool{
@@ -57,9 +58,9 @@ func (p *Pool) loop(ctx context.Context) {
 			}
 
 			if err := p.handler(ctx, id); err != nil && ctx.Err() == nil {
-				p.log.Error("job failed", "step", "job.failed", "invoice_id", id, "err", err)
+				p.log.Errorw("job failed", "step", "job.failed", "invoice_id", id, "err", err)
 			} else if err == nil {
-				p.log.Info("job.ok", "step", "job.ok", "invoice_id", id)
+				p.log.Infow("job.ok", "step", "job.ok", "invoice_id", id)
 			}
 		}
 	}
@@ -68,7 +69,7 @@ func (p *Pool) loop(ctx context.Context) {
 // Enqueue submits a job id. The unbuffered channel applies backpressure
 // instead of spawning a goroutine per upload.
 func (p *Pool) Enqueue(id string) {
-	p.log.Info("job.accepted", "step", "job.accepted", "invoice_id", id)
+	p.log.Infow("job.accepted", "step", "job.accepted", "invoice_id", id)
 	p.jobs <- id
 }
 

@@ -7,12 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/williamkoller/tesseract-poc-go/internal/extract"
+	"go.uber.org/zap"
 )
 
 const (
@@ -26,6 +26,7 @@ type Client struct {
 	apiKey     string
 	model      string
 	httpClient *http.Client
+	log        *zap.SugaredLogger
 }
 
 // NewClient builds an OpenRouter client. Empty apiKey disables Assist.
@@ -49,7 +50,21 @@ func NewClient(baseURL, apiKey, model string, timeout time.Duration) *Client {
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
+		log: zap.NewNop().Sugar(),
 	}
+}
+
+// WithLogger sets the structured logger. A nil logger keeps the nop logger.
+func (c *Client) WithLogger(log *zap.SugaredLogger) *Client {
+	if c == nil {
+		return c
+	}
+
+	if log != nil {
+		c.log = log
+	}
+
+	return c
 }
 
 // Enabled reports whether the client can call OpenRouter.
@@ -97,7 +112,7 @@ func (c *Client) Assist(ctx context.Context, ocrText string, hint extract.Result
 	req.Header.Set("HTTP-Referer", "https://github.com/williamkoller/tesseract-poc-go")
 	req.Header.Set("X-Title", "tesseract-poc-go")
 
-	slog.Info("openrouter.assist.request",
+	c.log.Infow("openrouter.assist.request",
 		"step", "openrouter.assist.request",
 		"engine", "openrouter",
 		"model", c.model,
@@ -107,7 +122,7 @@ func (c *Client) Assist(ctx context.Context, ocrText string, hint extract.Result
 	started := time.Now()
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		slog.Error("openrouter.assist.response",
+		c.log.Errorw("openrouter.assist.response",
 			"step", "openrouter.assist.response",
 			"engine", "openrouter",
 			"model", c.model,
@@ -136,7 +151,7 @@ func (c *Client) Assist(ctx context.Context, ocrText string, hint extract.Result
 		return hint, "", fmt.Errorf("openrouter returned no choices")
 	}
 
-	slog.Info("openrouter.assist.response",
+	c.log.Infow("openrouter.assist.response",
 		"step", "openrouter.assist.response",
 		"engine", "openrouter",
 		"model", c.model,

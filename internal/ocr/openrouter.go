@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 const (
@@ -26,6 +27,7 @@ type OpenRouter struct {
 	apiKey     string
 	model      string
 	httpClient *http.Client
+	log        *zap.SugaredLogger
 }
 
 // OpenRouterOptions configures the vision OCR client.
@@ -34,6 +36,7 @@ type OpenRouterOptions struct {
 	APIKey  string
 	Model   string
 	Timeout time.Duration
+	Log     *zap.SugaredLogger
 }
 
 // NewOpenRouter builds an HTTP vision OCR engine.
@@ -50,6 +53,11 @@ func NewOpenRouter(opts OpenRouterOptions) *OpenRouter {
 		opts.Timeout = 60 * time.Second
 	}
 
+	log := opts.Log
+	if log == nil {
+		log = zap.NewNop().Sugar()
+	}
+
 	return &OpenRouter{
 		baseURL: strings.TrimRight(strings.TrimSpace(opts.BaseURL), "/"),
 		apiKey:  strings.TrimSpace(opts.APIKey),
@@ -57,6 +65,7 @@ func NewOpenRouter(opts OpenRouterOptions) *OpenRouter {
 		httpClient: &http.Client{
 			Timeout: opts.Timeout,
 		},
+		log: log,
 	}
 }
 
@@ -114,7 +123,7 @@ func (o *OpenRouter) Recognize(ctx context.Context, imagePath string) (Result, e
 	req.Header.Set("HTTP-Referer", "https://github.com/williamkoller/tesseract-poc-go")
 	req.Header.Set("X-Title", "tesseract-poc-go")
 
-	slog.Info("openrouter.ocr.request",
+	o.log.Infow("openrouter.ocr.request",
 		"step", "openrouter.ocr.request",
 		"engine", "openrouter",
 		"model", o.model,
@@ -124,7 +133,7 @@ func (o *OpenRouter) Recognize(ctx context.Context, imagePath string) (Result, e
 	started := time.Now()
 	resp, err := o.httpClient.Do(req)
 	if err != nil {
-		slog.Error("openrouter.ocr.response",
+		o.log.Errorw("openrouter.ocr.response",
 			"step", "openrouter.ocr.response",
 			"engine", "openrouter",
 			"model", o.model,
@@ -158,7 +167,7 @@ func (o *OpenRouter) Recognize(ctx context.Context, imagePath string) (Result, e
 		return Result{}, fmt.Errorf("openrouter ocr returned empty text")
 	}
 
-	slog.Info("openrouter.ocr.response",
+	o.log.Infow("openrouter.ocr.response",
 		"step", "openrouter.ocr.response",
 		"engine", "openrouter",
 		"model", o.model,

@@ -7,11 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 const (
@@ -25,6 +26,7 @@ type Ollama struct {
 	baseURL    string
 	model      string
 	httpClient *http.Client
+	log        *zap.SugaredLogger
 }
 
 // OllamaOptions configures the local Ollama OCR engine.
@@ -32,6 +34,7 @@ type OllamaOptions struct {
 	BaseURL string
 	Model   string
 	Timeout time.Duration
+	Log     *zap.SugaredLogger
 }
 
 // NewOllama builds an HTTP client for glm-ocr (or any Ollama vision model).
@@ -48,12 +51,18 @@ func NewOllama(opts OllamaOptions) *Ollama {
 		opts.Timeout = 120 * time.Second
 	}
 
+	log := opts.Log
+	if log == nil {
+		log = zap.NewNop().Sugar()
+	}
+
 	return &Ollama{
 		baseURL: strings.TrimRight(strings.TrimSpace(opts.BaseURL), "/"),
 		model:   strings.TrimSpace(opts.Model),
 		httpClient: &http.Client{
 			Timeout: opts.Timeout,
 		},
+		log: log,
 	}
 }
 
@@ -91,7 +100,7 @@ func (o *Ollama) Recognize(ctx context.Context, imagePath string) (Result, error
 	req.Header.Set("Content-Type", "application/json")
 
 	url := o.baseURL + "/api/generate"
-	slog.Info("ollama.request",
+	o.log.Infow("ollama.request",
 		"step", "ollama.request",
 		"engine", "ollama",
 		"url", url,
@@ -104,7 +113,7 @@ func (o *Ollama) Recognize(ctx context.Context, imagePath string) (Result, error
 	started := time.Now()
 	resp, err := o.httpClient.Do(req)
 	if err != nil {
-		slog.Error("ollama.response",
+		o.log.Errorw("ollama.response",
 			"step", "ollama.response",
 			"engine", "ollama",
 			"url", url,
@@ -122,7 +131,7 @@ func (o *Ollama) Recognize(ctx context.Context, imagePath string) (Result, error
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		slog.Error("ollama.response",
+		o.log.Errorw("ollama.response",
 			"step", "ollama.response",
 			"engine", "ollama",
 			"url", url,
@@ -149,7 +158,7 @@ func (o *Ollama) Recognize(ctx context.Context, imagePath string) (Result, error
 		return Result{}, fmt.Errorf("ollama ocr returned empty text")
 	}
 
-	slog.Info("ollama.response",
+	o.log.Infow("ollama.response",
 		"step", "ollama.response",
 		"engine", "ollama",
 		"url", url,

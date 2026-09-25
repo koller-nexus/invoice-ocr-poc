@@ -46,7 +46,6 @@ linters:
     - fatcontext
     - sqlclosecheck
     - rowserrcheck
-    - sloglint
     - loggercheck
     - testifylint
     - thelper
@@ -89,6 +88,7 @@ linters:
     - protogetter
     - spancheck
     - zerologlint
+    - sloglint
   exclusions:
     paths:
       - vendor$

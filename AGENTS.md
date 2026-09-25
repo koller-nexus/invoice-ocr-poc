@@ -30,7 +30,7 @@ Target the `go` directive in `go.mod` (currently 1.27). Prefer the standard libr
 ### Errors, concurrency, security
 
 - Check every error. Wrap with `fmt.Errorf("context: %w", err)`. Lowercase error strings, no trailing punctuation.
-- Log or return, never both. Use `errors.Is` / `errors.As` / `errors.AsType`. Prefer `log/slog`.
+- Log or return, never both. Use `errors.Is` / `errors.As` / `errors.AsType`. Prefer `go.uber.org/zap` (`SugaredLogger`).
 - Every goroutine has an owner, an exit, and `ctx.Done()` in `select`. Sender closes the channel. Default to unbuffered. Run `go test -race`.
 - Parameterized queries, `exec.Command` with separate args, `os.Root` for user paths, `crypto/rand` for tokens. No secrets in source.
 
