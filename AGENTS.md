@@ -16,11 +16,11 @@ Go 1.27 OCR PoC. Prefer the local skills under `.agents/skills/` over generic ad
 
 ## Go
 
-Target the `go` directive in `go.mod` (currently 1.27). Prefer the standard library. Vet a new dependency with `godig` (`overview`, `vulns`, `imported-by`) before adding it.
+Target the `go` directive in `backend/go.mod` (currently 1.27). Prefer the standard library. Vet a new dependency with `godig` (`overview`, `vulns`, `imported-by`) before adding it.
 
 ### Layout and style
 
-- `cmd/` entrypoints, `internal/` app logic, `pkg/` shared utilities, `api/` transport, `configs/` configuration, `test/` fixtures.
+- Go lives under `backend/`: `cmd/` entrypoints, `internal/` app logic, `pkg/` shared utilities, `api/` transport, `configs/` configuration, `test/` fixtures. UI lives under `frontend/`.
 - Interfaces at the consumer. Inject dependencies through constructors. No global mutable state.
 - MixedCaps identifiers. Packages are a single lowercase word. Errors: `ErrNotFound`, types `PathError`.
 - `context.Context` is the first parameter, named `ctx`. Propagate the same context. Never store it on a struct. Call `cancel()` on every path.
@@ -44,6 +44,7 @@ Target the `go` directive in `go.mod` (currently 1.27). Prefer the standard libr
 ### Verification
 
 ```bash
+cd backend
 gofmt -l .
 go vet ./...
 go test ./...

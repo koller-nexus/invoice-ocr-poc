@@ -1,5 +1,7 @@
 # invoice-ocr-poc
 
+Monorepo: `backend/` (Go HTTP API) and `frontend/` (placeholder).
+
 Proof of concept HTTP API: upload a receipt image, enqueue processing, then poll SQLite-backed results.
 
 OCR is one of **Ollama** (`glm-ocr:latest`), **OpenRouter** vision, or local **Tesseract**. DeepSeek (OpenRouter) optionally extracts line items. TypeSafe Jev judges document type, routing, and risk.
@@ -41,12 +43,13 @@ flowchart LR
 ## Run
 
 ```bash
+cd backend
 cp configs/.env.example configs/.env
 # set OPENROUTER_API_KEY and TYPESAFE_API_KEY
 go run ./cmd/api
 ```
 
-Config is read from `.env` or `configs/.env`.
+Config is read from `.env` or `configs/.env` (relative to the process working directory).
 
 `OCR_ENGINE=ollama` (example), `openrouter`, or `tesseract`.
 
@@ -70,5 +73,6 @@ Flow: preprocess → OCR (Ollama, OpenRouter, or Tesseract) → extract / option
 ## Accuracy harness
 
 ```bash
+cd backend
 go test -tags evaluation ./test/
 ```

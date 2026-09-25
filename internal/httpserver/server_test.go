@@ -75,6 +75,45 @@ func TestProcessImage_Accepted(t *testing.T) {
 	}
 }
 
+func TestCORS_PreflightAndGET(t *testing.T) {
+	t.Parallel()
+
+	st, err := store.Open(t.Context(), t.TempDir()+"/cors.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := NewRouter(Deps{Store: st, HasAPIKey: true})
+	origin := "http://localhost:5173"
+
+	opt := httptest.NewRequest(http.MethodOptions, "/api/v1/invoices", nil)
+	opt.Header.Set("Origin", origin)
+	opt.Header.Set("Access-Control-Request-Method", "GET")
+	orec := httptest.NewRecorder()
+	r.ServeHTTP(orec, opt)
+
+	if orec.Code != http.StatusNoContent {
+		t.Fatalf("preflight status %d", orec.Code)
+	}
+
+	if got := orec.Header().Get("Access-Control-Allow-Origin"); got != origin {
+		t.Fatalf("preflight origin %q", got)
+	}
+
+	get := httptest.NewRequest(http.MethodGet, "/health", nil)
+	get.Header.Set("Origin", origin)
+	grec := httptest.NewRecorder()
+	r.ServeHTTP(grec, get)
+
+	if grec.Code != http.StatusOK {
+		t.Fatalf("get status %d", grec.Code)
+	}
+
+	if got := grec.Header().Get("Access-Control-Allow-Origin"); got != origin {
+		t.Fatalf("get origin %q", got)
+	}
+}
+
 func TestHealth(t *testing.T) {
 	t.Parallel()
 

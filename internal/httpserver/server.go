@@ -30,7 +30,7 @@ func NewRouter(d Deps) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.New()
-	r.Use(gin.Logger(), gin.Recovery())
+	r.Use(gin.Logger(), gin.Recovery(), cors())
 	r.MaxMultipartMemory = d.MaxBodyBytes
 
 	r.GET("/health", d.health)
