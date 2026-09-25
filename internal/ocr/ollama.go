@@ -158,17 +158,36 @@ func (o *Ollama) Recognize(ctx context.Context, imagePath string) (Result, error
 		return Result{}, fmt.Errorf("ollama ocr returned empty text")
 	}
 
+	durationMs := nsToMs(parsed.TotalDuration)
+	if durationMs <= 0 {
+		durationMs = time.Since(started).Milliseconds()
+	}
+
 	o.log.Infow("ollama.response",
 		"step", "ollama.response",
 		"engine", "ollama",
 		"url", url,
 		"model", o.model,
 		"status", resp.StatusCode,
-		"duration_ms", time.Since(started).Milliseconds(),
+		"duration_ms", durationMs,
+		"eval_count", parsed.EvalCount,
+		"prompt_eval_count", parsed.PromptEvalCount,
 		"text_chars", len(text),
 	)
 
-	return Result{Text: text, Confidence: 0}, nil
+	return Result{
+		Text:       text,
+		Confidence: 0,
+		Usage:      Usage{DurationMs: durationMs},
+	}, nil
+}
+
+func nsToMs(ns int64) int64 {
+	if ns <= 0 {
+		return 0
+	}
+
+	return ns / 1_000_000
 }
 
 func trimOCRFences(text string) string {
@@ -194,8 +213,11 @@ type ollamaGenerateRequest struct {
 }
 
 type ollamaGenerateResponse struct {
-	Response string `json:"response"`
-	Message  struct {
+	Response        string `json:"response"`
+	TotalDuration   int64  `json:"total_duration"`
+	EvalCount       int    `json:"eval_count"`
+	PromptEvalCount int    `json:"prompt_eval_count"`
+	Message         struct {
 		Content string `json:"content"`
 	} `json:"message"`
 }

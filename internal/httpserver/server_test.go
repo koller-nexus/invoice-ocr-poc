@@ -7,11 +7,25 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/williamkoller/invoice-ocr-poc/internal/invoice"
+	"github.com/williamkoller/invoice-ocr-poc/internal/ocr"
 	"github.com/williamkoller/invoice-ocr-poc/internal/store"
 )
+
+type stubOCR struct {
+	available bool
+}
+
+func (s stubOCR) Recognize(context.Context, string) (ocr.Result, error) {
+	return ocr.Result{}, nil
+}
+
+func (s stubOCR) Available() bool {
+	return s.available
+}
 
 type nopJobs struct{}
 
@@ -266,5 +280,168 @@ func TestGetAnalysis_Done(t *testing.T) {
 
 	if got["invoice_id"] != "done1" {
 		t.Fatalf("%+v", got)
+	}
+}
+
+func TestRuntime_PublicConfig(t *testing.T) {
+	t.Parallel()
+
+	st, err := store.Open(t.Context(), t.TempDir()+"/runtime.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := NewRouter(Deps{
+		Store:              st,
+		OCR:                stubOCR{available: true},
+		HasOpenRouterKey:   true,
+		MaxBodyBytes:       8388608,
+		OCRName:            "ollama",
+		OllamaModel:        "glm-ocr:latest",
+		OpenRouterModel:    "deepseek/deepseek-chat-v3-0324:free",
+		OpenRouterOCRModel: "qwen/qwen3-vl-8b-instruct",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/runtime", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+
+	var got runtimeResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if got.OCREngine != "ollama" {
+		t.Fatalf("engine %q", got.OCREngine)
+	}
+
+	if got.MaxUploadBytes != 8388608 {
+		t.Fatalf("max upload %d", got.MaxUploadBytes)
+	}
+
+	if got.Ollama.Model != "glm-ocr:latest" || !got.Ollama.Configured {
+		t.Fatalf("ollama %+v", got.Ollama)
+	}
+
+	if got.OpenRouter.Model != "deepseek/deepseek-chat-v3-0324:free" {
+		t.Fatalf("openrouter model %q", got.OpenRouter.Model)
+	}
+
+	if got.OpenRouter.OCRModel != "qwen/qwen3-vl-8b-instruct" || !got.OpenRouter.Configured {
+		t.Fatalf("openrouter %+v", got.OpenRouter)
+	}
+
+	raw := rec.Body.String()
+	if strings.Contains(raw, "sk-") || strings.Contains(raw, "api_key") || strings.Contains(raw, "API_KEY") {
+		t.Fatalf("runtime leaked a secret: %s", raw)
+	}
+}
+
+func TestRuntime_OpenRouterNotConfigured(t *testing.T) {
+	t.Parallel()
+
+	st, err := store.Open(t.Context(), t.TempDir()+"/runtime2.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := NewRouter(Deps{
+		Store:            st,
+		OCR:              stubOCR{available: false},
+		HasOpenRouterKey: false,
+		MaxBodyBytes:     1024,
+		OCRName:          "openrouter",
+		OllamaModel:      "glm-ocr",
+		OpenRouterModel:  "deepseek/deepseek-chat",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/runtime", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+
+	var got runtimeResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if got.OCREngine != "openrouter" {
+		t.Fatalf("engine %q", got.OCREngine)
+	}
+
+	if got.Ollama.Configured {
+		t.Fatalf("expected ollama unconfigured")
+	}
+
+	if got.OpenRouter.Configured {
+		t.Fatalf("expected openrouter unconfigured")
+	}
+}
+
+func TestGetInvoice_Usage(t *testing.T) {
+	t.Parallel()
+
+	st, err := store.Open(t.Context(), t.TempDir()+"/usage.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc := invoice.NewService(st, nopJobs{}, t.TempDir(), 1024, nil, nil)
+	inv := &store.Invoice{
+		ID:                         "u1",
+		Status:                     store.StatusDone,
+		OpenRouterPromptTokens:     12,
+		OpenRouterCompletionTokens: 8,
+		OpenRouterTotalTokens:      20,
+		OpenRouterCostUSD:          0.0004,
+		OpenRouterLatencyMs:        900,
+		OllamaDurationMs:           1500,
+		JevInputTokens:             296,
+		JevOutputTokens:            20,
+		JevTotalTokens:             316,
+		JevLatencyMs:               410,
+		JevModel:                   "jev-1.13.0",
+		ProcessingMs:               4000,
+	}
+	if err := st.Create(t.Context(), inv); err != nil {
+		t.Fatal(err)
+	}
+
+	r := NewRouter(Deps{Service: svc, Store: st, HasAPIKey: true, MaxBodyBytes: 1024})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/invoices/u1", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+
+	var got invoiceResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if got.Usage.OpenRouter.TotalTokens != 20 || got.Usage.OpenRouter.CostUSD != 0.0004 {
+		t.Fatalf("openrouter %+v", got.Usage.OpenRouter)
+	}
+
+	if got.Usage.OpenRouter.LatencyMs != 900 || got.Usage.Ollama.DurationMs != 1500 {
+		t.Fatalf("usage %+v", got.Usage)
+	}
+
+	if got.Usage.Jev.TotalTokens != 316 || got.Usage.Jev.LatencyMs != 410 || got.Usage.Jev.Model != "jev-1.13.0" {
+		t.Fatalf("jev %+v", got.Usage.Jev)
+	}
+
+	raw := rec.Body.String()
+	if strings.Contains(raw, "sk-") || strings.Contains(raw, "api_key") {
+		t.Fatalf("usage leaked a secret: %s", raw)
 	}
 }

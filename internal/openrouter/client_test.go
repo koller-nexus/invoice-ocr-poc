@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/williamkoller/invoice-ocr-poc/internal/extract"
+	"github.com/williamkoller/invoice-ocr-poc/internal/ocr"
 	"go.uber.org/zap"
 )
 
@@ -33,26 +34,38 @@ func TestAssist_ParsesItems(t *testing.T) {
 			t.Errorf("model %s", req.Model)
 		}
 
+		if !req.Usage.Include {
+			t.Error("expected usage.include")
+		}
+
 		_ = json.NewEncoder(w).Encode(chatResponse{
-			Choices: []struct {
-				Message chatMessage `json:"message"`
-			}{{
+			Choices: []chatChoice{{
 				Message: chatMessage{
 					Content: `{"items":[{"produto":"Arroz","quantidade":1,"valor_unitario":10,"line_total":10}],"total_estimado":10,"soma_itens":10,"soma_confere":true,"notas":"OCR legível"}`,
 				},
 			}},
+			Usage: ocr.TokenUsage{
+				PromptTokens:     12,
+				CompletionTokens: 8,
+				TotalTokens:      20,
+				Cost:             0.0004,
+			},
 		})
 	}))
 	defer srv.Close()
 
 	c := NewClient(srv.URL, "or-key", "", 2*time.Second)
-	got, notes, err := c.Assist(t.Context(), "Arroz 10,00 Total 10,00", extract.Result{})
+	got, notes, usage, err := c.Assist(t.Context(), "Arroz 10,00 Total 10,00", extract.Result{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if !strings.Contains(notes, "OCR legível") || len(got.Items) != 1 || got.ComputedItemsTotal != 10 {
 		t.Fatalf("%+v notes=%q", got, notes)
+	}
+
+	if usage.TotalTokens != 20 || usage.CostUSD != 0.0004 {
+		t.Fatalf("usage %+v", usage)
 	}
 }
 

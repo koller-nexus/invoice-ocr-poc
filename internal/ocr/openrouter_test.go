@@ -32,9 +32,20 @@ func TestOpenRouter_Recognize(t *testing.T) {
 			t.Errorf("model %v", body["model"])
 		}
 
+		usage, _ := body["usage"].(map[string]any)
+		if usage["include"] != true {
+			t.Errorf("usage %#v", body["usage"])
+		}
+
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []map[string]any{
 				{"message": map[string]string{"content": "Cafe 10,00\nTOTAL 10,00"}},
+			},
+			"usage": map[string]any{
+				"prompt_tokens":     30,
+				"completion_tokens": 10,
+				"total_tokens":      40,
+				"cost":              0.0012,
 			},
 		})
 	}))
@@ -57,6 +68,10 @@ func TestOpenRouter_Recognize(t *testing.T) {
 
 	if !strings.Contains(got.Text, "TOTAL 10,00") {
 		t.Fatalf("%q", got.Text)
+	}
+
+	if got.Usage.TotalTokens != 40 || got.Usage.CostUSD != 0.0012 {
+		t.Fatalf("usage %+v", got.Usage)
 	}
 }
 

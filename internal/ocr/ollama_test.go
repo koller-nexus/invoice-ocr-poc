@@ -37,7 +37,10 @@ func TestOllama_Recognize(t *testing.T) {
 		}
 
 		_ = json.NewEncoder(w).Encode(ollamaGenerateResponse{
-			Response: "Cafe 10,00\nTOTAL 10,00",
+			Response:        "Cafe 10,00\nTOTAL 10,00",
+			TotalDuration:   1_500_000_000,
+			EvalCount:       40,
+			PromptEvalCount: 12,
 		})
 	}))
 	defer srv.Close()
@@ -55,6 +58,22 @@ func TestOllama_Recognize(t *testing.T) {
 
 	if !strings.Contains(got.Text, "TOTAL 10,00") {
 		t.Fatalf("%q", got.Text)
+	}
+
+	if got.Usage.DurationMs != 1500 {
+		t.Fatalf("duration %d", got.Usage.DurationMs)
+	}
+}
+
+func TestNsToMs(t *testing.T) {
+	t.Parallel()
+
+	if got := nsToMs(0); got != 0 {
+		t.Fatalf("%d", got)
+	}
+
+	if got := nsToMs(2_400_000_000); got != 2400 {
+		t.Fatalf("%d", got)
 	}
 }
 

@@ -47,12 +47,13 @@ func TestEvaluate_ComposesReviewFlags(t *testing.T) {
 				"total_consistent":    {"type": "noul", "noul": 0.9},
 				"risk":                {"type": "score", "score": 2.0, "confidence": 0.8},
 			},
+			Usage: tokenUsage{InputTokens: 296, OutputTokens: 20},
 		})
 	}))
 	defer srv.Close()
 
 	c := NewClient(srv.URL, "test-key", 2*time.Second)
-	got, err := c.Evaluate(t.Context(), State{
+	got, usage, err := c.Evaluate(t.Context(), State{
 		OCRText: "Total 10,00",
 		Extracted: extract.Result{
 			EstimatedTotal:     10,
@@ -81,6 +82,14 @@ func TestEvaluate_ComposesReviewFlags(t *testing.T) {
 
 	if got.RiskLabel != "high" {
 		t.Fatalf("risk %s", got.RiskLabel)
+	}
+
+	if usage.InputTokens != 296 || usage.OutputTokens != 20 || usage.TotalTokens != 316 {
+		t.Fatalf("tokens %+v", usage)
+	}
+
+	if usage.Model != "jev-1.13.0" {
+		t.Fatalf("model %s", usage.Model)
 	}
 }
 
@@ -111,7 +120,7 @@ func TestEvaluate_RetriesOn429(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(srv.URL, "k", 2*time.Second)
-	got, err := c.Evaluate(t.Context(), State{})
+	got, _, err := c.Evaluate(t.Context(), State{})
 	if err != nil {
 		t.Fatal(err)
 	}
