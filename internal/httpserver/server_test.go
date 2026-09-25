@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/williamkoller/invoice-ocr-poc/internal/invoice"
+	"github.com/williamkoller/invoice-ocr-poc/internal/jev"
 	"github.com/williamkoller/invoice-ocr-poc/internal/ocr"
 	"github.com/williamkoller/invoice-ocr-poc/internal/store"
 )
@@ -27,21 +28,31 @@ func (s stubOCR) Available() bool {
 	return s.available
 }
 
-type nopJobs struct{}
-
-func (nopJobs) Enqueue(context.Context, string) error { return nil }
-
-type fullJobs struct{}
-
-func (fullJobs) Enqueue(context.Context, string) error { return invoice.ErrQueueFull }
-
-func TestProcessImage_Accepted(t *testing.T) {
-	t.Parallel()
+func testStore(t *testing.T) *store.Store {
+	t.Helper()
 
 	st, err := store.Open(t.Context(), t.TempDir()+"/t.db")
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	t.Cleanup(func() { _ = st.Close() })
+
+	return st
+}
+
+type nopJobs struct{}
+
+func (nopJobs) Enqueue(context.Context, *store.Invoice) error { return nil }
+
+type fullJobs struct{}
+
+func (fullJobs) Enqueue(context.Context, *store.Invoice) error { return invoice.ErrQueueFull }
+
+func TestProcessImage_Accepted(t *testing.T) {
+	t.Parallel()
+
+	st := testStore(t)
 
 	svc := invoice.NewService(st, nopJobs{}, t.TempDir(), 1024*1024, nil, nil)
 	r := NewRouter(Deps{
@@ -97,10 +108,7 @@ func TestProcessImage_Accepted(t *testing.T) {
 func TestProcessImage_QueueFull(t *testing.T) {
 	t.Parallel()
 
-	st, err := store.Open(t.Context(), t.TempDir()+"/t.db")
-	if err != nil {
-		t.Fatal(err)
-	}
+	st := testStore(t)
 
 	svc := invoice.NewService(st, fullJobs{}, t.TempDir(), 1024*1024, nil, nil)
 	r := NewRouter(Deps{
@@ -148,10 +156,7 @@ func TestProcessImage_QueueFull(t *testing.T) {
 func TestCORS_PreflightAndGET(t *testing.T) {
 	t.Parallel()
 
-	st, err := store.Open(t.Context(), t.TempDir()+"/cors.db")
-	if err != nil {
-		t.Fatal(err)
-	}
+	st := testStore(t)
 
 	r := NewRouter(Deps{Store: st, HasAPIKey: true})
 	origin := "http://localhost:5173"
@@ -187,10 +192,7 @@ func TestCORS_PreflightAndGET(t *testing.T) {
 func TestHealth(t *testing.T) {
 	t.Parallel()
 
-	st, err := store.Open(t.Context(), t.TempDir()+"/h.db")
-	if err != nil {
-		t.Fatal(err)
-	}
+	st := testStore(t)
 
 	r := NewRouter(Deps{Store: st, HasAPIKey: false})
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -214,10 +216,7 @@ func TestHealth(t *testing.T) {
 func TestGetAnalysis_NotReady(t *testing.T) {
 	t.Parallel()
 
-	st, err := store.Open(t.Context(), t.TempDir()+"/q.db")
-	if err != nil {
-		t.Fatal(err)
-	}
+	st := testStore(t)
 
 	svc := invoice.NewService(st, nopJobs{}, t.TempDir(), 1024*1024, nil, nil)
 	inv := &store.Invoice{ID: "queued1", Status: store.StatusQueued}
@@ -238,10 +237,7 @@ func TestGetAnalysis_NotReady(t *testing.T) {
 func TestGetAnalysis_Done(t *testing.T) {
 	t.Parallel()
 
-	st, err := store.Open(t.Context(), t.TempDir()+"/d.db")
-	if err != nil {
-		t.Fatal(err)
-	}
+	st := testStore(t)
 
 	svc := invoice.NewService(st, nopJobs{}, t.TempDir(), 1024*1024, nil, nil)
 	inv := &store.Invoice{
@@ -286,10 +282,7 @@ func TestGetAnalysis_Done(t *testing.T) {
 func TestRuntime_PublicConfig(t *testing.T) {
 	t.Parallel()
 
-	st, err := store.Open(t.Context(), t.TempDir()+"/runtime.db")
-	if err != nil {
-		t.Fatal(err)
-	}
+	st := testStore(t)
 
 	r := NewRouter(Deps{
 		Store:              st,
@@ -344,10 +337,7 @@ func TestRuntime_PublicConfig(t *testing.T) {
 func TestRuntime_OpenRouterNotConfigured(t *testing.T) {
 	t.Parallel()
 
-	st, err := store.Open(t.Context(), t.TempDir()+"/runtime2.db")
-	if err != nil {
-		t.Fatal(err)
-	}
+	st := testStore(t)
 
 	r := NewRouter(Deps{
 		Store:            st,
@@ -388,10 +378,7 @@ func TestRuntime_OpenRouterNotConfigured(t *testing.T) {
 func TestGetInvoice_Usage(t *testing.T) {
 	t.Parallel()
 
-	st, err := store.Open(t.Context(), t.TempDir()+"/usage.db")
-	if err != nil {
-		t.Fatal(err)
-	}
+	st := testStore(t)
 
 	svc := invoice.NewService(st, nopJobs{}, t.TempDir(), 1024, nil, nil)
 	inv := &store.Invoice{
@@ -403,6 +390,11 @@ func TestGetInvoice_Usage(t *testing.T) {
 		OpenRouterCostUSD:          0.0004,
 		OpenRouterLatencyMs:        900,
 		OllamaDurationMs:           1500,
+		OllamaLoadDurationMs:       200,
+		OllamaPromptEvalCount:      12,
+		OllamaPromptEvalDurationMs: 300,
+		OllamaEvalCount:            40,
+		OllamaEvalDurationMs:       900,
 		JevInputTokens:             296,
 		JevOutputTokens:            20,
 		JevTotalTokens:             316,
@@ -436,8 +428,20 @@ func TestGetInvoice_Usage(t *testing.T) {
 		t.Fatalf("usage %+v", got.Usage)
 	}
 
+	if got.Usage.Ollama.LoadDurationMs != 200 || got.Usage.Ollama.EvalCount != 40 || got.Usage.Ollama.EvalDurationMs != 900 {
+		t.Fatalf("ollama %+v", got.Usage.Ollama)
+	}
+
+	if got.Usage.Ollama.PromptEvalCount != 12 || got.Usage.Ollama.PromptEvalDurationMs != 300 {
+		t.Fatalf("ollama prompt %+v", got.Usage.Ollama)
+	}
+
 	if got.Usage.Jev.TotalTokens != 316 || got.Usage.Jev.LatencyMs != 410 || got.Usage.Jev.Model != "jev-1.13.0" {
 		t.Fatalf("jev %+v", got.Usage.Jev)
+	}
+
+	if got.Usage.Jev.CostUSD != jev.EstimateCostUSD(296) {
+		t.Fatalf("jev cost %v", got.Usage.Jev.CostUSD)
 	}
 
 	raw := rec.Body.String()

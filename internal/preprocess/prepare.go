@@ -1,4 +1,4 @@
-// Package preprocess writes a working image for OCR (resize and JPEG).
+// Package preprocess exposes the working image path for OCR.
 package preprocess
 
 import "context"

@@ -54,15 +54,21 @@ type usageOpenRouter struct {
 }
 
 type usageOllama struct {
-	DurationMs int64 `json:"duration_ms,omitempty"`
+	DurationMs           int64 `json:"duration_ms,omitempty"`
+	LoadDurationMs       int64 `json:"load_duration_ms,omitempty"`
+	PromptEvalCount      int   `json:"prompt_eval_count,omitempty"`
+	PromptEvalDurationMs int64 `json:"prompt_eval_duration_ms,omitempty"`
+	EvalCount            int   `json:"eval_count,omitempty"`
+	EvalDurationMs       int64 `json:"eval_duration_ms,omitempty"`
 }
 
 type usageJev struct {
-	InputTokens  int    `json:"input_tokens,omitempty"`
-	OutputTokens int    `json:"output_tokens,omitempty"`
-	TotalTokens  int    `json:"total_tokens,omitempty"`
-	LatencyMs    int64  `json:"latency_ms,omitempty"`
-	Model        string `json:"model,omitempty"`
+	InputTokens  int     `json:"input_tokens,omitempty"`
+	OutputTokens int     `json:"output_tokens,omitempty"`
+	TotalTokens  int     `json:"total_tokens,omitempty"`
+	CostUSD      float64 `json:"cost_usd,omitempty"`
+	LatencyMs    int64   `json:"latency_ms,omitempty"`
+	Model        string  `json:"model,omitempty"`
 }
 
 type invoiceUsage struct {
@@ -114,17 +120,35 @@ func toInvoiceResponse(inv *store.Invoice) invoiceResponse {
 				LatencyMs:        inv.OpenRouterLatencyMs,
 			},
 			Ollama: usageOllama{
-				DurationMs: inv.OllamaDurationMs,
+				DurationMs:           inv.OllamaDurationMs,
+				LoadDurationMs:       inv.OllamaLoadDurationMs,
+				PromptEvalCount:      inv.OllamaPromptEvalCount,
+				PromptEvalDurationMs: inv.OllamaPromptEvalDurationMs,
+				EvalCount:            inv.OllamaEvalCount,
+				EvalDurationMs:       inv.OllamaEvalDurationMs,
 			},
 			Jev: usageJev{
 				InputTokens:  inv.JevInputTokens,
 				OutputTokens: inv.JevOutputTokens,
 				TotalTokens:  inv.JevTotalTokens,
+				CostUSD:      jevCostUSD(inv),
 				LatencyMs:    inv.JevLatencyMs,
 				Model:        inv.JevModel,
 			},
 		},
 	}
+}
+
+func jevCostUSD(inv *store.Invoice) float64 {
+	if inv.JevCostUSD > 0 {
+		return inv.JevCostUSD
+	}
+
+	if inv.JevInputTokens <= 0 {
+		return 0
+	}
+
+	return jev.EstimateCostUSD(inv.JevInputTokens)
 }
 
 type healthResponse struct {
@@ -133,8 +157,15 @@ type healthResponse struct {
 }
 
 type runtimeOllama struct {
-	Model      string `json:"model"`
-	Configured bool   `json:"configured"`
+	Model         string `json:"model"`
+	Configured    bool   `json:"configured"`
+	Reachable     bool   `json:"reachable"`
+	Loaded        bool   `json:"loaded"`
+	ParameterSize string `json:"parameter_size,omitempty"`
+	Quantization  string `json:"quantization,omitempty"`
+	ContextLength int    `json:"context_length,omitempty"`
+	SizeBytes     int64  `json:"size_bytes,omitempty"`
+	VRAMBytes     int64  `json:"vram_bytes,omitempty"`
 }
 
 type runtimeOpenRouter struct {

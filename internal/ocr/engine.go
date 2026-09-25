@@ -5,21 +5,31 @@ import "context"
 
 // Usage is provider telemetry from one OCR or assist call.
 type Usage struct {
-	PromptTokens     int
-	CompletionTokens int
-	TotalTokens      int
-	CostUSD          float64
-	DurationMs       int64
+	PromptTokens         int
+	CompletionTokens     int
+	TotalTokens          int
+	CostUSD              float64
+	DurationMs           int64
+	LoadDurationMs       int64
+	PromptEvalCount      int
+	PromptEvalDurationMs int64
+	EvalCount            int
+	EvalDurationMs       int64
 }
 
 // Add sums another call's usage into u.
 func (u Usage) Add(other Usage) Usage {
 	return Usage{
-		PromptTokens:     u.PromptTokens + other.PromptTokens,
-		CompletionTokens: u.CompletionTokens + other.CompletionTokens,
-		TotalTokens:      u.TotalTokens + other.TotalTokens,
-		CostUSD:          u.CostUSD + other.CostUSD,
-		DurationMs:       u.DurationMs + other.DurationMs,
+		PromptTokens:         u.PromptTokens + other.PromptTokens,
+		CompletionTokens:     u.CompletionTokens + other.CompletionTokens,
+		TotalTokens:          u.TotalTokens + other.TotalTokens,
+		CostUSD:              u.CostUSD + other.CostUSD,
+		DurationMs:           u.DurationMs + other.DurationMs,
+		LoadDurationMs:       u.LoadDurationMs + other.LoadDurationMs,
+		PromptEvalCount:      u.PromptEvalCount + other.PromptEvalCount,
+		PromptEvalDurationMs: u.PromptEvalDurationMs + other.PromptEvalDurationMs,
+		EvalCount:            u.EvalCount + other.EvalCount,
+		EvalDurationMs:       u.EvalDurationMs + other.EvalDurationMs,
 	}
 }
 

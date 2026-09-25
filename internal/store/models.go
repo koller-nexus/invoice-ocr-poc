@@ -50,9 +50,15 @@ type Invoice struct {
 	OpenRouterCostUSD          float64
 	OpenRouterLatencyMs        int64
 	OllamaDurationMs           int64
+	OllamaLoadDurationMs       int64
+	OllamaPromptEvalCount      int
+	OllamaPromptEvalDurationMs int64
+	OllamaEvalCount            int
+	OllamaEvalDurationMs       int64
 	JevInputTokens             int
 	JevOutputTokens            int
 	JevTotalTokens             int
+	JevCostUSD                 float64
 	JevLatencyMs               int64
 	JevModel                   string
 	CreatedAt                  time.Time

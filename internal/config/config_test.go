@@ -35,6 +35,50 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.JobQueueSize != 32 {
 		t.Fatalf("queue size %d", cfg.JobQueueSize)
 	}
+
+	if cfg.OCRMinConfidence != 0.75 {
+		t.Fatalf("min confidence %v", cfg.OCRMinConfidence)
+	}
+
+	if cfg.WorkerCountLocal != 2 {
+		t.Fatalf("local workers %d", cfg.WorkerCountLocal)
+	}
+
+	if cfg.WorkerCountAPI != 2 {
+		t.Fatalf("api workers %d", cfg.WorkerCountAPI)
+	}
+
+	if cfg.OCRTimeout != 120*time.Second {
+		t.Fatalf("ocr timeout %s", cfg.OCRTimeout)
+	}
+
+	if cfg.AssistTimeout != 45*time.Second {
+		t.Fatalf("assist timeout %s", cfg.AssistTimeout)
+	}
+
+	if cfg.JevTimeout != 30*time.Second {
+		t.Fatalf("jev timeout %s", cfg.JevTimeout)
+	}
+
+	if cfg.DebugPprof {
+		t.Fatal("pprof should be off by default")
+	}
+
+	if cfg.DebugPprofAddr != "127.0.0.1:6060" {
+		t.Fatalf("pprof addr %s", cfg.DebugPprofAddr)
+	}
+
+	if cfg.PrepWorkers != 1 {
+		t.Fatalf("prep workers %d", cfg.PrepWorkers)
+	}
+
+	if !cfg.OCRCacheEnabled {
+		t.Fatal("cache should be enabled by default")
+	}
+
+	if cfg.OCRCacheTTL != time.Hour {
+		t.Fatalf("cache ttl %s", cfg.OCRCacheTTL)
+	}
 }
 
 func TestLoad_InvalidJobQueueSize(t *testing.T) {
@@ -44,6 +88,41 @@ func TestLoad_InvalidJobQueueSize(t *testing.T) {
 
 	if _, err := Load(); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestLoad_WorkerAliases(t *testing.T) {
+	t.Chdir(t.TempDir())
+	clearConfigEnv(t)
+	t.Setenv(keyOCRWorkers, "3")
+	t.Setenv(keyJevWorkers, "5")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.WorkerCountLocal != 3 || cfg.WorkerCountAPI != 5 {
+		t.Fatalf("alias local=%d api=%d", cfg.WorkerCountLocal, cfg.WorkerCountAPI)
+	}
+
+	t.Setenv(keyWorkerCountLocal, "4")
+	t.Setenv(keyWorkerCountAPI, "8")
+	t.Setenv(keyOCRTimeout, "30s")
+	t.Setenv(keyAssistTimeout, "45s")
+	t.Setenv(keyJevTimeout, "30s")
+
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.WorkerCountLocal != 4 || cfg.WorkerCountAPI != 8 {
+		t.Fatalf("override local=%d api=%d", cfg.WorkerCountLocal, cfg.WorkerCountAPI)
+	}
+
+	if cfg.OCRTimeout != 30*time.Second || cfg.AssistTimeout != 45*time.Second || cfg.JevTimeout != 30*time.Second {
+		t.Fatalf("hop timeouts %s %s %s", cfg.OCRTimeout, cfg.AssistTimeout, cfg.JevTimeout)
 	}
 }
 
@@ -112,6 +191,14 @@ func clearConfigEnv(t *testing.T) {
 		keyMaxUploadBytes,
 		keyWorkerCount,
 		keyJobQueueSize,
+		keyPrepWorkers,
+		keyOCRWorkers,
+		keyJevWorkers,
+		keyIngestBuffer,
+		keyOCRBuffer,
+		keyJevBuffer,
+		keyJobTimeout,
+		keyShutdownTimeout,
 		keyTesseractLang,
 		keyTypeSafeAPIKey,
 		keyTypeSafeBaseURL,
@@ -126,6 +213,16 @@ func clearConfigEnv(t *testing.T) {
 		keyOllamaOCRModel,
 		keyOllamaTimeout,
 		keyLogFormat,
+		keyOCRMinConfidence,
+		keyWorkerCountLocal,
+		keyWorkerCountAPI,
+		keyOCRTimeout,
+		keyAssistTimeout,
+		keyJevTimeout,
+		keyDebugPprof,
+		keyDebugPprofAddr,
+		keyOCRCacheEnabled,
+		keyOCRCacheTTL,
 	} {
 		t.Setenv(key, "")
 	}

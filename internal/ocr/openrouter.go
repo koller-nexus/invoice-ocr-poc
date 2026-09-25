@@ -32,11 +32,12 @@ type OpenRouter struct {
 
 // OpenRouterOptions configures the vision OCR client.
 type OpenRouterOptions struct {
-	BaseURL string
-	APIKey  string
-	Model   string
-	Timeout time.Duration
-	Log     *zap.SugaredLogger
+	BaseURL    string
+	APIKey     string
+	Model      string
+	Timeout    time.Duration
+	HTTPClient *http.Client
+	Log        *zap.SugaredLogger
 }
 
 // NewOpenRouter builds an HTTP vision OCR engine.
@@ -49,23 +50,22 @@ func NewOpenRouter(opts OpenRouterOptions) *OpenRouter {
 		opts.Model = defaultOpenRouterOCR
 	}
 
-	if opts.Timeout <= 0 {
-		opts.Timeout = 60 * time.Second
-	}
-
 	log := opts.Log
 	if log == nil {
 		log = zap.NewNop().Sugar()
 	}
 
+	httpClient := opts.HTTPClient
+	if httpClient == nil {
+		httpClient = &http.Client{}
+	}
+
 	return &OpenRouter{
-		baseURL: strings.TrimRight(strings.TrimSpace(opts.BaseURL), "/"),
-		apiKey:  strings.TrimSpace(opts.APIKey),
-		model:   strings.TrimSpace(opts.Model),
-		httpClient: &http.Client{
-			Timeout: opts.Timeout,
-		},
-		log: log,
+		baseURL:    strings.TrimRight(strings.TrimSpace(opts.BaseURL), "/"),
+		apiKey:     strings.TrimSpace(opts.APIKey),
+		model:      strings.TrimSpace(opts.Model),
+		httpClient: httpClient,
+		log:        log,
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/williamkoller/invoice-ocr-poc/internal/extract"
 )
@@ -52,7 +51,7 @@ func TestEvaluate_ComposesReviewFlags(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "test-key", 2*time.Second)
+	c := NewClient(srv.URL, "test-key", nil)
 	got, usage, err := c.Evaluate(t.Context(), State{
 		OCRText: "Total 10,00",
 		Extracted: extract.Result{
@@ -88,8 +87,42 @@ func TestEvaluate_ComposesReviewFlags(t *testing.T) {
 		t.Fatalf("tokens %+v", usage)
 	}
 
+	if usage.CostUSD != EstimateCostUSD(296) {
+		t.Fatalf("cost %v", usage.CostUSD)
+	}
+
 	if usage.Model != "jev-1.13.0" {
 		t.Fatalf("model %s", usage.Model)
+	}
+}
+
+func TestEstimateCostUSD(t *testing.T) {
+	t.Parallel()
+
+	if got := EstimateCostUSD(0); got != 0 {
+		t.Fatalf("zero tokens %v", got)
+	}
+
+	if got := EstimateCostUSD(1_000_000); got != InputPricePerMillionUSD {
+		t.Fatalf("million tokens %v", got)
+	}
+}
+
+func TestUsageOf_PrefersReportedCost(t *testing.T) {
+	t.Parallel()
+
+	reported := 0.0123
+	got := usageOf(responseBody{
+		Model: "jev-1.13.0",
+		Usage: tokenUsage{
+			InputTokens:  296,
+			OutputTokens: 20,
+			CostUSD:      &reported,
+		},
+	}, 10)
+
+	if got.CostUSD != reported {
+		t.Fatalf("cost %v", got.CostUSD)
 	}
 }
 
@@ -119,7 +152,7 @@ func TestEvaluate_RetriesOn429(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "k", 2*time.Second)
+	c := NewClient(srv.URL, "k", nil)
 	got, _, err := c.Evaluate(t.Context(), State{})
 	if err != nil {
 		t.Fatal(err)

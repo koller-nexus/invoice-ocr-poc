@@ -24,6 +24,11 @@ const (
 	ConfidenceFloor = 0.6
 	// TotalDelta is the allowed gap between estimated and computed totals.
 	TotalDelta = 0.05
+
+	// InputPricePerMillionUSD is the published Jev 1.13 list price
+	// (docs.typesafe.ai/models: $0.042 / Mtok input; output is free).
+	// TypeSafe usage does not include cost; we estimate from this rate.
+	InputPricePerMillionUSD = 0.042
 )
 
 // Client talks to POST /v1/systemone.
@@ -33,14 +38,16 @@ type Client struct {
 	httpClient *http.Client
 }
 
-// NewClient builds an HTTP Jev client.
-func NewClient(baseURL, apiKey string, timeout time.Duration) *Client {
+// NewClient builds an HTTP Jev client. Timeouts belong on the request context.
+func NewClient(baseURL, apiKey string, httpClient *http.Client) *Client {
+	if httpClient == nil {
+		httpClient = &http.Client{}
+	}
+
 	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		apiKey:  apiKey,
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		apiKey:     apiKey,
+		httpClient: httpClient,
 	}
 }
 
@@ -72,6 +79,7 @@ type Usage struct {
 	InputTokens  int
 	OutputTokens int
 	TotalTokens  int
+	CostUSD      float64
 	LatencyMs    int64
 	Model        string
 }
@@ -89,8 +97,10 @@ type responseBody struct {
 }
 
 type tokenUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens  int      `json:"input_tokens"`
+	OutputTokens int      `json:"output_tokens"`
+	CostUSD      *float64 `json:"cost_usd,omitempty"`
+	Cost         *float64 `json:"cost,omitempty"`
 }
 
 // Evaluate sends one fan-out request and composes the verdict in code.
@@ -127,13 +137,40 @@ func (c *Client) Evaluate(ctx context.Context, state State) (Judgment, Usage, er
 
 func usageOf(resp responseBody, latencyMs int64) Usage {
 	total := resp.Usage.InputTokens + resp.Usage.OutputTokens
+	cost, ok := reportedCostUSD(resp.Usage)
+	if !ok {
+		cost = EstimateCostUSD(resp.Usage.InputTokens)
+	}
+
 	return Usage{
 		InputTokens:  resp.Usage.InputTokens,
 		OutputTokens: resp.Usage.OutputTokens,
 		TotalTokens:  total,
+		CostUSD:      cost,
 		LatencyMs:    latencyMs,
 		Model:        resp.Model,
 	}
+}
+
+// EstimateCostUSD applies the published Jev input list price.
+func EstimateCostUSD(inputTokens int) float64 {
+	if inputTokens <= 0 {
+		return 0
+	}
+
+	return float64(inputTokens) * InputPricePerMillionUSD / 1_000_000
+}
+
+func reportedCostUSD(u tokenUsage) (float64, bool) {
+	if u.CostUSD != nil {
+		return *u.CostUSD, true
+	}
+
+	if u.Cost != nil {
+		return *u.Cost, true
+	}
+
+	return 0, false
 }
 
 func questions() map[string]any {

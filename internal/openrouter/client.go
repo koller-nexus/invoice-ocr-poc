@@ -31,7 +31,8 @@ type Client struct {
 }
 
 // NewClient builds an OpenRouter client. Empty apiKey disables Assist.
-func NewClient(baseURL, apiKey, model string, timeout time.Duration) *Client {
+// Timeouts belong on the request context, not on the shared client.
+func NewClient(baseURL, apiKey, model string, httpClient *http.Client) *Client {
 	if strings.TrimSpace(baseURL) == "" {
 		baseURL = defaultBaseURL
 	}
@@ -40,18 +41,16 @@ func NewClient(baseURL, apiKey, model string, timeout time.Duration) *Client {
 		model = defaultModel
 	}
 
-	if timeout <= 0 {
-		timeout = 45 * time.Second
+	if httpClient == nil {
+		httpClient = &http.Client{}
 	}
 
 	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		apiKey:  strings.TrimSpace(apiKey),
-		model:   model,
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
-		log: zap.NewNop().Sugar(),
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		apiKey:     strings.TrimSpace(apiKey),
+		model:      model,
+		httpClient: httpClient,
+		log:        zap.NewNop().Sugar(),
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/williamkoller/invoice-ocr-poc/internal/extract"
 	"github.com/williamkoller/invoice-ocr-poc/internal/ocr"
@@ -54,7 +53,7 @@ func TestAssist_ParsesItems(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "or-key", "", 2*time.Second)
+	c := NewClient(srv.URL, "or-key", "", nil)
 	got, notes, usage, err := c.Assist(t.Context(), "Arroz 10,00 Total 10,00", extract.Result{})
 	if err != nil {
 		t.Fatal(err)
@@ -86,7 +85,7 @@ func TestParseAssist_IgnoresEmptyItems(t *testing.T) {
 func TestEnabled(t *testing.T) {
 	t.Parallel()
 
-	if NewClient("", "", "", 0).Enabled() {
+	if NewClient("", "", "", nil).Enabled() {
 		t.Fatal("empty key should disable")
 	}
 }
@@ -99,7 +98,7 @@ func TestClient_WithLogger(t *testing.T) {
 		t.Fatal("nil receiver should stay nil")
 	}
 
-	c := NewClient("", "", "", 0)
+	c := NewClient("", "", "", nil)
 	if c.WithLogger(nil) != c {
 		t.Fatal("nil logger should keep receiver")
 	}

@@ -2,10 +2,12 @@
 package httpserver
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/williamkoller/invoice-ocr-poc/internal/invoice"
@@ -16,9 +18,10 @@ import (
 
 // Deps are handler dependencies.
 type Deps struct {
-	Service          *invoice.Service
-	Store            *store.Store
-	OCR              ocr.Engine
+	Service            *invoice.Service
+	Store              *store.Store
+	OCR                ocr.Engine
+	Ollama             *ocr.Ollama
 	HasAPIKey          bool
 	HasOpenRouterKey   bool
 	MaxBodyBytes       int64
@@ -88,20 +91,46 @@ func (d Deps) runtime(c *gin.Context) {
 	}
 
 	ollamaConfigured := (engine == "ollama" || engine == "glm-ocr") && d.OCR != nil && d.OCR.Available()
+	ollama := runtimeOllama{
+		Model:      d.OllamaModel,
+		Configured: ollamaConfigured,
+	}
+	if info, ok := d.inspectOllama(c.Request.Context()); ok {
+		ollama.Reachable = info.Reachable
+		ollama.Loaded = info.Loaded
+		ollama.ParameterSize = info.ParameterSize
+		ollama.Quantization = info.Quantization
+		ollama.ContextLength = info.ContextLength
+		ollama.SizeBytes = info.SizeBytes
+		ollama.VRAMBytes = info.VRAMBytes
+	}
 
 	c.JSON(http.StatusOK, runtimeResponse{
 		OCREngine:      engine,
 		MaxUploadBytes: d.MaxBodyBytes,
-		Ollama: runtimeOllama{
-			Model:      d.OllamaModel,
-			Configured: ollamaConfigured,
-		},
+		Ollama:         ollama,
 		OpenRouter: runtimeOpenRouter{
 			Model:      d.OpenRouterModel,
 			OCRModel:   d.OpenRouterOCRModel,
 			Configured: d.HasOpenRouterKey,
 		},
 	})
+}
+
+func (d Deps) inspectOllama(ctx context.Context) (ocr.ModelInfo, bool) {
+	if d.Ollama == nil {
+		return ocr.ModelInfo{}, false
+	}
+
+	probeCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+	defer cancel()
+
+	info, err := d.Ollama.Inspect(probeCtx)
+	if err != nil {
+		return ocr.ModelInfo{}, true
+	}
+
+	return info, true
 }
 
 func (d Deps) processImage(c *gin.Context) {
