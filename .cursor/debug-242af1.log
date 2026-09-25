@@ -1,0 +1,3 @@
+{"data":{"chars":33847,"dashToken":6164,"sepLines":770},"hypothesisId":"A","location":"ocr/ollama.go:Recognize.raw","message":"ollama raw dash stats","sessionId":"242af1","timestamp":1790297362020}
+{"data":{"chars":33847,"dashToken":6164,"sepLines":770},"hypothesisId":"D","location":"ocr/ollama.go:Recognize.trim","message":"after trimOCRFences dash stats","sessionId":"242af1","timestamp":1790297362021}
+{"data":{"chars":33847,"dashToken":6164,"engine":"*ocr.Ollama","invoice_id":"f8293e883a0f7ae9fcb0d64cabcb6e3e","sepLines":770},"hypothesisId":"E","location":"invoice/service.go:ocr.done","message":"stored ocr_text dash stats","sessionId":"242af1","timestamp":1790297362025}

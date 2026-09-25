@@ -41,6 +41,7 @@ type invoiceResponse struct {
 	AssistModel        string         `json:"assist_model,omitempty"`
 	AssistNotes        string         `json:"assist_notes,omitempty"`
 	ErrorMessage       string         `json:"error_message,omitempty"`
+	ProcessingMs       int64          `json:"processing_ms,omitempty"`
 }
 
 func toInvoiceResponse(inv *store.Invoice) invoiceResponse {
@@ -76,6 +77,7 @@ func toInvoiceResponse(inv *store.Invoice) invoiceResponse {
 		AssistModel:        inv.AssistModel,
 		AssistNotes:        inv.AssistNotes,
 		ErrorMessage:       inv.ErrorMessage,
+		ProcessingMs:       inv.ProcessingMs,
 	}
 }
 

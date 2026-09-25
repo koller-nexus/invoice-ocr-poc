@@ -43,6 +43,7 @@ type Invoice struct {
 	AssistNotes        string
 	AssistUsed         bool
 	ErrorMessage       string
+	ProcessingMs       int64
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	DeletedAt          gorm.DeletedAt `gorm:"index"`

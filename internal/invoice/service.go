@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/williamkoller/tesseract-poc-go/internal/extract"
 	"github.com/williamkoller/tesseract-poc-go/internal/jev"
@@ -153,6 +154,8 @@ func (s *Service) List(ctx context.Context, limit, offset int) ([]store.Invoice,
 
 // ProcessJob runs OCR, optional DeepSeek assist, extract, and Jev for one invoice.
 func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, judge *jev.Client, assist Assistant) error {
+	started := time.Now()
+
 	inv, err := s.store.Get(ctx, id)
 	if err != nil {
 		return err
@@ -168,7 +171,7 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 	prepDir := filepath.Join(s.uploadDir, inv.ID+"-prep")
 	imgPath, err := s.prep.Prepare(ctx, inv.StoredPath, prepDir)
 	if err != nil {
-		return s.fail(ctx, inv, fmt.Errorf("preprocess: %w", err))
+		return s.fail(ctx, inv, fmt.Errorf("preprocess: %w", err), started)
 	}
 
 	s.log.Infow("preprocess.done", "step", "preprocess.done", "invoice_id", id)
@@ -177,9 +180,10 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 
 	ocrRes, err := engine.Recognize(ctx, imgPath)
 	if err != nil {
-		return s.fail(ctx, inv, fmt.Errorf("ocr: %w", err))
+		return s.fail(ctx, inv, fmt.Errorf("ocr: %w", err), started)
 	}
 
+	ocrRes.Text = ocr.CleanText(ocrRes.Text)
 	inv.OCRText = ocrRes.Text
 	inv.OCRConfidence = ocrRes.Confidence
 	s.log.Infow("ocr.done",
@@ -228,7 +232,7 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 
 	itemsJSON, err := json.Marshal(parsed.Items)
 	if err != nil {
-		return s.fail(ctx, inv, fmt.Errorf("marshal items: %w", err))
+		return s.fail(ctx, inv, fmt.Errorf("marshal items: %w", err), started)
 	}
 
 	inv.ItemsJSON = string(itemsJSON)
@@ -240,10 +244,11 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 		Extracted: parsed,
 	})
 	if err != nil {
-		return s.fail(ctx, inv, fmt.Errorf("jev: %w", err))
+		return s.fail(ctx, inv, fmt.Errorf("jev: %w", err), started)
 	}
 
 	applyJudgment(inv, judgment)
+	inv.ProcessingMs = time.Since(started).Milliseconds()
 	inv.Status = store.StatusDone
 
 	s.log.Infow("jev.done",
@@ -258,16 +263,18 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 		return err
 	}
 
-	s.log.Infow("job.done", "step", "job.done", "invoice_id", id, "status", inv.Status)
+	s.log.Infow("job.done", "step", "job.done", "invoice_id", id, "status", inv.Status, "duration_ms", inv.ProcessingMs)
 
 	return nil
 }
 
-func (s *Service) fail(ctx context.Context, inv *store.Invoice, cause error) error {
+func (s *Service) fail(ctx context.Context, inv *store.Invoice, cause error, started time.Time) error {
+	inv.ProcessingMs = time.Since(started).Milliseconds()
 	s.log.Errorw("job.fail",
 		"step", "job.fail",
 		"invoice_id", inv.ID,
 		"err", cause,
+		"duration_ms", inv.ProcessingMs,
 	)
 
 	inv.Status = store.StatusFailed
