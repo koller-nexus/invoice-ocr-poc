@@ -1,0 +1,11 @@
+{
+  "cases": [
+    {
+      "id": "placeholder",
+      "image": "placeholder.png",
+      "estimated_total": 0,
+      "item_count": 0,
+      "skip": true
+    }
+  ]
+}

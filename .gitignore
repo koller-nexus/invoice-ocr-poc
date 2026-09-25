@@ -1,0 +1,9 @@
+/bin/
+/data/
+/uploads/
+*.db
+*.sqlite
+.env
+.DS_Store
+coverage.out
+skills-lock.json
