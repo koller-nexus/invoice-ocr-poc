@@ -1,13 +1,9 @@
 /bin/
 /data/
 /uploads/
-/backend/data/
-/backend/uploads/
-/backend/bin/
 *.db
 *.sqlite
 .env
-backend/configs/.env
 .DS_Store
 coverage.out
 skills-lock.json

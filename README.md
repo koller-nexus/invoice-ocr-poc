@@ -1,7 +1,5 @@
 # invoice-ocr-poc
 
-Monorepo: `backend/` (Go HTTP API) and `frontend/` (placeholder).
-
 Proof of concept HTTP API: upload a receipt image, enqueue processing, then poll SQLite-backed results.
 
 OCR is one of **Ollama** (`glm-ocr:latest`), **OpenRouter** vision, or local **Tesseract**. DeepSeek (OpenRouter) optionally extracts line items. TypeSafe Jev judges document type, routing, and risk.
