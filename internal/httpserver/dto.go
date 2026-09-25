@@ -42,6 +42,33 @@ type invoiceResponse struct {
 	AssistNotes        string         `json:"assist_notes,omitempty"`
 	ErrorMessage       string         `json:"error_message,omitempty"`
 	ProcessingMs       int64          `json:"processing_ms,omitempty"`
+	Usage              invoiceUsage   `json:"usage"`
+}
+
+type usageOpenRouter struct {
+	PromptTokens     int     `json:"prompt_tokens,omitempty"`
+	CompletionTokens int     `json:"completion_tokens,omitempty"`
+	TotalTokens      int     `json:"total_tokens,omitempty"`
+	CostUSD          float64 `json:"cost_usd,omitempty"`
+	LatencyMs        int64   `json:"latency_ms,omitempty"`
+}
+
+type usageOllama struct {
+	DurationMs int64 `json:"duration_ms,omitempty"`
+}
+
+type usageJev struct {
+	InputTokens  int    `json:"input_tokens,omitempty"`
+	OutputTokens int    `json:"output_tokens,omitempty"`
+	TotalTokens  int    `json:"total_tokens,omitempty"`
+	LatencyMs    int64  `json:"latency_ms,omitempty"`
+	Model        string `json:"model,omitempty"`
+}
+
+type invoiceUsage struct {
+	OpenRouter usageOpenRouter `json:"openrouter"`
+	Ollama     usageOllama     `json:"ollama"`
+	Jev        usageJev        `json:"jev"`
 }
 
 func toInvoiceResponse(inv *store.Invoice) invoiceResponse {
@@ -78,12 +105,49 @@ func toInvoiceResponse(inv *store.Invoice) invoiceResponse {
 		AssistNotes:        inv.AssistNotes,
 		ErrorMessage:       inv.ErrorMessage,
 		ProcessingMs:       inv.ProcessingMs,
+		Usage: invoiceUsage{
+			OpenRouter: usageOpenRouter{
+				PromptTokens:     inv.OpenRouterPromptTokens,
+				CompletionTokens: inv.OpenRouterCompletionTokens,
+				TotalTokens:      inv.OpenRouterTotalTokens,
+				CostUSD:          inv.OpenRouterCostUSD,
+				LatencyMs:        inv.OpenRouterLatencyMs,
+			},
+			Ollama: usageOllama{
+				DurationMs: inv.OllamaDurationMs,
+			},
+			Jev: usageJev{
+				InputTokens:  inv.JevInputTokens,
+				OutputTokens: inv.JevOutputTokens,
+				TotalTokens:  inv.JevTotalTokens,
+				LatencyMs:    inv.JevLatencyMs,
+				Model:        inv.JevModel,
+			},
+		},
 	}
 }
 
 type healthResponse struct {
 	Status string            `json:"status"`
 	Checks map[string]string `json:"checks"`
+}
+
+type runtimeOllama struct {
+	Model      string `json:"model"`
+	Configured bool   `json:"configured"`
+}
+
+type runtimeOpenRouter struct {
+	Model      string `json:"model"`
+	OCRModel   string `json:"ocr_model"`
+	Configured bool   `json:"configured"`
+}
+
+type runtimeResponse struct {
+	OCREngine      string            `json:"ocr_engine"`
+	MaxUploadBytes int64             `json:"max_upload_bytes"`
+	Ollama         runtimeOllama     `json:"ollama"`
+	OpenRouter     runtimeOpenRouter `json:"openrouter"`
 }
 
 type errorBody struct {

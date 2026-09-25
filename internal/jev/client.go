@@ -67,6 +67,15 @@ type Judgment struct {
 	ItemsConfirmed    bool
 }
 
+// Usage is billed tokens and wall-clock time for one Evaluate call.
+type Usage struct {
+	InputTokens  int
+	OutputTokens int
+	TotalTokens  int
+	LatencyMs    int64
+	Model        string
+}
+
 type requestBody struct {
 	Model     string         `json:"model"`
 	State     State          `json:"state"`
@@ -76,12 +85,18 @@ type requestBody struct {
 type responseBody struct {
 	Model   string                    `json:"model"`
 	Answers map[string]map[string]any `json:"answers"`
+	Usage   tokenUsage                `json:"usage"`
+}
+
+type tokenUsage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
 }
 
 // Evaluate sends one fan-out request and composes the verdict in code.
-func (c *Client) Evaluate(ctx context.Context, state State) (Judgment, error) {
+func (c *Client) Evaluate(ctx context.Context, state State) (Judgment, Usage, error) {
 	if c.apiKey == "" {
-		return Judgment{}, fmt.Errorf("typesafe api key is required")
+		return Judgment{}, Usage{}, fmt.Errorf("typesafe api key is required")
 	}
 
 	body := requestBody{
@@ -92,15 +107,33 @@ func (c *Client) Evaluate(ctx context.Context, state State) (Judgment, error) {
 
 	raw, err := json.Marshal(body)
 	if err != nil {
-		return Judgment{}, fmt.Errorf("marshal jev request: %w", err)
+		return Judgment{}, Usage{}, fmt.Errorf("marshal jev request: %w", err)
 	}
 
+	started := time.Now()
 	respBody, err := c.post(ctx, raw)
+	latencyMs := time.Since(started).Milliseconds()
 	if err != nil {
-		return Judgment{}, err
+		return Judgment{}, Usage{}, err
 	}
 
-	return compose(state, respBody)
+	judgment, err := compose(state, respBody)
+	if err != nil {
+		return Judgment{}, Usage{}, err
+	}
+
+	return judgment, usageOf(respBody, latencyMs), nil
+}
+
+func usageOf(resp responseBody, latencyMs int64) Usage {
+	total := resp.Usage.InputTokens + resp.Usage.OutputTokens
+	return Usage{
+		InputTokens:  resp.Usage.InputTokens,
+		OutputTokens: resp.Usage.OutputTokens,
+		TotalTokens:  total,
+		LatencyMs:    latencyMs,
+		Model:        resp.Model,
+	}
 }
 
 func questions() map[string]any {

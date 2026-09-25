@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/williamkoller/invoice-ocr-poc/internal/extract"
+	"github.com/williamkoller/invoice-ocr-poc/internal/ocr"
 	"go.uber.org/zap"
 )
 
@@ -82,9 +83,9 @@ func (c *Client) Model() string {
 }
 
 // Assist asks DeepSeek to recover line items from OCR text. Code still owns totals.
-func (c *Client) Assist(ctx context.Context, ocrText string, hint extract.Result) (extract.Result, string, error) {
+func (c *Client) Assist(ctx context.Context, ocrText string, hint extract.Result) (extract.Result, string, ocr.Usage, error) {
 	if !c.Enabled() {
-		return hint, "", nil
+		return hint, "", ocr.Usage{}, nil
 	}
 
 	payload, err := json.Marshal(chatRequest{
@@ -97,14 +98,15 @@ func (c *Client) Assist(ctx context.Context, ocrText string, hint extract.Result
 		ResponseFormat: map[string]string{
 			"type": "json_object",
 		},
+		Usage: ocr.UsageInclude{Include: true},
 	})
 	if err != nil {
-		return hint, "", fmt.Errorf("marshal openrouter request: %w", err)
+		return hint, "", ocr.Usage{}, fmt.Errorf("marshal openrouter request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(payload))
 	if err != nil {
-		return hint, "", fmt.Errorf("new openrouter request: %w", err)
+		return hint, "", ocr.Usage{}, fmt.Errorf("new openrouter request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
@@ -129,26 +131,29 @@ func (c *Client) Assist(ctx context.Context, ocrText string, hint extract.Result
 			"duration_ms", time.Since(started).Milliseconds(),
 			"err", err,
 		)
-		return hint, "", fmt.Errorf("openrouter request: %w", err)
+		return hint, "", ocr.Usage{DurationMs: time.Since(started).Milliseconds()}, fmt.Errorf("openrouter request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if err != nil {
-		return hint, "", fmt.Errorf("read openrouter body: %w", err)
+		return hint, "", ocr.Usage{DurationMs: time.Since(started).Milliseconds()}, fmt.Errorf("read openrouter body: %w", err)
 	}
 
+	durationMs := time.Since(started).Milliseconds()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return hint, "", fmt.Errorf("openrouter status %d: %s", resp.StatusCode, bytes.TrimSpace(body))
+		return hint, "", ocr.Usage{DurationMs: durationMs}, fmt.Errorf("openrouter status %d: %s", resp.StatusCode, bytes.TrimSpace(body))
 	}
 
 	var parsed chatResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return hint, "", fmt.Errorf("decode openrouter response: %w", err)
+		return hint, "", ocr.Usage{DurationMs: durationMs}, fmt.Errorf("decode openrouter response: %w", err)
 	}
 
+	usage := parsed.Usage.ToUsage(durationMs)
+
 	if len(parsed.Choices) == 0 {
-		return hint, "", fmt.Errorf("openrouter returned no choices")
+		return hint, "", usage, fmt.Errorf("openrouter returned no choices")
 	}
 
 	c.log.Infow("openrouter.assist.response",
@@ -156,10 +161,13 @@ func (c *Client) Assist(ctx context.Context, ocrText string, hint extract.Result
 		"engine", "openrouter",
 		"model", c.model,
 		"status", resp.StatusCode,
-		"duration_ms", time.Since(started).Milliseconds(),
+		"duration_ms", durationMs,
+		"total_tokens", usage.TotalTokens,
+		"cost_usd", usage.CostUSD,
 	)
 
-	return parseAssist(parsed.Choices[0].Message.Content, hint)
+	result, notes, err := parseAssist(parsed.Choices[0].Message.Content, hint)
+	return result, notes, usage, err
 }
 
 type chatRequest struct {
@@ -167,6 +175,7 @@ type chatRequest struct {
 	Messages       []chatMessage     `json:"messages"`
 	Temperature    float64           `json:"temperature"`
 	ResponseFormat map[string]string `json:"response_format"`
+	Usage          ocr.UsageInclude  `json:"usage"`
 }
 
 type chatMessage struct {
@@ -174,10 +183,13 @@ type chatMessage struct {
 	Content string `json:"content"`
 }
 
+type chatChoice struct {
+	Message chatMessage `json:"message"`
+}
+
 type chatResponse struct {
-	Choices []struct {
-		Message chatMessage `json:"message"`
-	} `json:"choices"`
+	Choices []chatChoice   `json:"choices"`
+	Usage   ocr.TokenUsage `json:"usage"`
 }
 
 type assistJSON struct {

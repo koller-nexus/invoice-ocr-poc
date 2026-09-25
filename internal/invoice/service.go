@@ -49,7 +49,7 @@ type Jobs interface {
 type Assistant interface {
 	Enabled() bool
 	Model() string
-	Assist(ctx context.Context, ocrText string, hint extract.Result) (extract.Result, string, error)
+	Assist(ctx context.Context, ocrText string, hint extract.Result) (extract.Result, string, ocr.Usage, error)
 }
 
 // Service coordinates storage, files, and jobs.
@@ -197,6 +197,7 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 	ocrRes.Text = ocr.CleanText(ocrRes.Text)
 	inv.OCRText = ocrRes.Text
 	inv.OCRConfidence = ocrRes.Confidence
+	applyOCRUsage(inv, ocrRes.Usage)
 	s.log.Infow("ocr.done",
 		"step", "ocr.done",
 		"invoice_id", id,
@@ -212,8 +213,9 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 	)
 
 	if assist != nil && assist.Enabled() {
-		improved, notes, aerr := assist.Assist(ctx, ocrRes.Text, parsed)
+		improved, notes, usage, aerr := assist.Assist(ctx, ocrRes.Text, parsed)
 		inv.AssistModel = assist.Model()
+		applyOpenRouterUsage(inv, usage)
 		if aerr != nil {
 			inv.AssistNotes = "falha no apoio LLM: " + aerr.Error()
 			inv.AssistUsed = false
@@ -250,7 +252,7 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 	inv.EstimatedTotal = parsed.EstimatedTotal
 	inv.ComputedItemsTotal = parsed.ComputedItemsTotal
 
-	judgment, err := judge.Evaluate(ctx, jev.State{
+	judgment, usage, err := judge.Evaluate(ctx, jev.State{
 		OCRText:   ocrRes.Text,
 		Extracted: parsed,
 	})
@@ -259,6 +261,7 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 	}
 
 	applyJudgment(inv, judgment)
+	applyJevUsage(inv, usage)
 	inv.ProcessingMs = time.Since(started).Milliseconds()
 	inv.Status = store.StatusDone
 
@@ -268,6 +271,9 @@ func (s *Service) ProcessJob(ctx context.Context, id string, engine ocr.Engine, 
 		"document_type", judgment.DocumentType,
 		"routing", judgment.EffectiveRouting,
 		"needs_review", judgment.NeedsReview,
+		"input_tokens", usage.InputTokens,
+		"output_tokens", usage.OutputTokens,
+		"latency_ms", usage.LatencyMs,
 	)
 
 	if err := s.store.Update(ctx, inv); err != nil {
@@ -308,6 +314,35 @@ func previewText(s string, n int) string {
 	}
 
 	return string(runes[:n])
+}
+
+func applyOCRUsage(inv *store.Invoice, usage ocr.Usage) {
+	if usage.HasOpenRouter() {
+		applyOpenRouterUsage(inv, usage)
+		return
+	}
+
+	if usage.DurationMs > 0 {
+		inv.OllamaDurationMs += usage.DurationMs
+	}
+}
+
+func applyOpenRouterUsage(inv *store.Invoice, usage ocr.Usage) {
+	inv.OpenRouterPromptTokens += usage.PromptTokens
+	inv.OpenRouterCompletionTokens += usage.CompletionTokens
+	inv.OpenRouterTotalTokens += usage.TotalTokens
+	inv.OpenRouterCostUSD += usage.CostUSD
+	inv.OpenRouterLatencyMs += usage.DurationMs
+}
+
+func applyJevUsage(inv *store.Invoice, usage jev.Usage) {
+	inv.JevInputTokens += usage.InputTokens
+	inv.JevOutputTokens += usage.OutputTokens
+	inv.JevTotalTokens += usage.TotalTokens
+	inv.JevLatencyMs += usage.LatencyMs
+	if usage.Model != "" {
+		inv.JevModel = usage.Model
+	}
 }
 
 func applyJudgment(inv *store.Invoice, j jev.Judgment) {

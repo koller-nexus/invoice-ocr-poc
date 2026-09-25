@@ -105,13 +105,16 @@ func run() error {
 	pool.Start(ctx)
 
 	router := httpserver.NewRouter(httpserver.Deps{
-		Service:          svc,
-		Store:            st,
-		OCR:              engine,
-		HasAPIKey:        cfg.TypeSafeAPIKey != "",
-		HasOpenRouterKey: cfg.OpenRouterAPIKey != "",
-		MaxBodyBytes:     cfg.MaxUploadBytes,
-		OCRName:          cfg.OCREngine,
+		Service:            svc,
+		Store:              st,
+		OCR:                engine,
+		HasAPIKey:          cfg.TypeSafeAPIKey != "",
+		HasOpenRouterKey:   cfg.OpenRouterAPIKey != "",
+		MaxBodyBytes:       cfg.MaxUploadBytes,
+		OCRName:            cfg.OCREngine,
+		OllamaModel:        cfg.OllamaOCRModel,
+		OpenRouterModel:    cfg.OpenRouterModel,
+		OpenRouterOCRModel: cfg.OpenRouterOCRModel,
 	})
 
 	srv := &http.Server{

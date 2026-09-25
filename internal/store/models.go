@@ -16,35 +16,46 @@ const (
 
 // Invoice is a persisted OCR + Jev job.
 type Invoice struct {
-	ID                 string `gorm:"primaryKey"`
-	Status             string `gorm:"index"`
-	OriginalName       string
-	StoredPath         string
-	MimeType           string
-	OCRText            string
-	OCRConfidence      float64
-	EstimatedTotal     float64
-	ComputedItemsTotal float64
-	ItemsJSON          string
-	ItemsConfirmed     bool
-	DocumentType       string
-	DocumentTypeConf   float64
-	SuggestedRouting   string
-	RoutingConfidence  float64
-	EffectiveRouting   string
-	AmountsSupported   float64
-	ItemsQtySupported  float64
-	TotalConsistent    float64
-	RiskScore          float64
-	RiskLabel          string
-	RiskConfidence     float64
-	NeedsReview        bool
-	AssistModel        string
-	AssistNotes        string
-	AssistUsed         bool
-	ErrorMessage       string
-	ProcessingMs       int64
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	DeletedAt          gorm.DeletedAt `gorm:"index"`
+	ID                         string `gorm:"primaryKey"`
+	Status                     string `gorm:"index"`
+	OriginalName               string
+	StoredPath                 string
+	MimeType                   string
+	OCRText                    string
+	OCRConfidence              float64
+	EstimatedTotal             float64
+	ComputedItemsTotal         float64
+	ItemsJSON                  string
+	ItemsConfirmed             bool
+	DocumentType               string
+	DocumentTypeConf           float64
+	SuggestedRouting           string
+	RoutingConfidence          float64
+	EffectiveRouting           string
+	AmountsSupported           float64
+	ItemsQtySupported          float64
+	TotalConsistent            float64
+	RiskScore                  float64
+	RiskLabel                  string
+	RiskConfidence             float64
+	NeedsReview                bool
+	AssistModel                string
+	AssistNotes                string
+	AssistUsed                 bool
+	ErrorMessage               string
+	ProcessingMs               int64
+	OpenRouterPromptTokens     int
+	OpenRouterCompletionTokens int
+	OpenRouterTotalTokens      int
+	OpenRouterCostUSD          float64
+	OpenRouterLatencyMs        int64
+	OllamaDurationMs           int64
+	JevInputTokens             int
+	JevOutputTokens            int
+	JevTotalTokens             int
+	JevLatencyMs               int64
+	JevModel                   string
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
+	DeletedAt                  gorm.DeletedAt `gorm:"index"`
 }

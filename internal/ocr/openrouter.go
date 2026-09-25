@@ -108,6 +108,7 @@ func (o *OpenRouter) Recognize(ctx context.Context, imagePath string) (Result, e
 			},
 		},
 		Temperature: 0.1,
+		Usage:       UsageInclude{Include: true},
 	})
 	if err != nil {
 		return Result{}, fmt.Errorf("marshal openrouter ocr request: %w", err)
@@ -167,16 +168,21 @@ func (o *OpenRouter) Recognize(ctx context.Context, imagePath string) (Result, e
 		return Result{}, fmt.Errorf("openrouter ocr returned empty text")
 	}
 
+	durationMs := time.Since(started).Milliseconds()
+	usage := parsed.Usage.ToUsage(durationMs)
+
 	o.log.Infow("openrouter.ocr.response",
 		"step", "openrouter.ocr.response",
 		"engine", "openrouter",
 		"model", o.model,
 		"status", resp.StatusCode,
-		"duration_ms", time.Since(started).Milliseconds(),
+		"duration_ms", durationMs,
+		"total_tokens", usage.TotalTokens,
+		"cost_usd", usage.CostUSD,
 		"text_chars", len(text),
 	)
 
-	return Result{Text: text, Confidence: 0}, nil
+	return Result{Text: text, Confidence: 0, Usage: usage}, nil
 }
 
 func imageMIME(path string, raw []byte) string {
@@ -203,6 +209,7 @@ type orChatRequest struct {
 	Model       string          `json:"model"`
 	Messages    []orChatMessage `json:"messages"`
 	Temperature float64         `json:"temperature"`
+	Usage       UsageInclude    `json:"usage"`
 }
 
 type orChatMessage struct {
@@ -226,4 +233,5 @@ type orChatResponse struct {
 			Content string `json:"content"`
 		} `json:"message"`
 	} `json:"choices"`
+	Usage TokenUsage `json:"usage"`
 }

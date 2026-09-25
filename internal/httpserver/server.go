@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/williamkoller/invoice-ocr-poc/internal/invoice"
@@ -18,10 +19,13 @@ type Deps struct {
 	Service          *invoice.Service
 	Store            *store.Store
 	OCR              ocr.Engine
-	HasAPIKey        bool
-	HasOpenRouterKey bool
-	MaxBodyBytes     int64
-	OCRName          string
+	HasAPIKey          bool
+	HasOpenRouterKey   bool
+	MaxBodyBytes       int64
+	OCRName            string
+	OllamaModel        string
+	OpenRouterModel    string
+	OpenRouterOCRModel string
 }
 
 // NewRouter builds the Gin engine.
@@ -34,6 +38,7 @@ func NewRouter(d Deps) *gin.Engine {
 
 	r.GET("/health", d.health)
 	api := r.Group("/api/v1")
+	api.GET("/runtime", d.runtime)
 	api.POST("/image/processor", d.processImage)
 	api.GET("/invoices/:id/analysis", d.getAnalysis)
 	api.GET("/invoices/:id", d.getInvoice)
@@ -74,6 +79,29 @@ func (d Deps) health(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, healthResponse{Status: status, Checks: checks})
+}
+
+func (d Deps) runtime(c *gin.Context) {
+	engine := strings.ToLower(strings.TrimSpace(d.OCRName))
+	if engine == "" {
+		engine = "openrouter"
+	}
+
+	ollamaConfigured := (engine == "ollama" || engine == "glm-ocr") && d.OCR != nil && d.OCR.Available()
+
+	c.JSON(http.StatusOK, runtimeResponse{
+		OCREngine:      engine,
+		MaxUploadBytes: d.MaxBodyBytes,
+		Ollama: runtimeOllama{
+			Model:      d.OllamaModel,
+			Configured: ollamaConfigured,
+		},
+		OpenRouter: runtimeOpenRouter{
+			Model:      d.OpenRouterModel,
+			OCRModel:   d.OpenRouterOCRModel,
+			Configured: d.HasOpenRouterKey,
+		},
+	})
 }
 
 func (d Deps) processImage(c *gin.Context) {
