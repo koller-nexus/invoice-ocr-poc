@@ -1,5 +1,3 @@
-//go:build !gocv
-
 package preprocess
 
 import (
@@ -10,17 +8,12 @@ import (
 	"path/filepath"
 )
 
-// Noop copies the source image when OpenCV is not built in.
+// Noop copies the source image without changing pixels.
 type Noop struct{}
 
 // New returns a preparer that does not alter pixels.
 func New() Preparer {
 	return Noop{}
-}
-
-// Available is false without the gocv build tag.
-func (Noop) Available() bool {
-	return false
 }
 
 // Prepare copies src into destDir so the worker always has a stable path.

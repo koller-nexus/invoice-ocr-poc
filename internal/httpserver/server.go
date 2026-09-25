@@ -22,7 +22,6 @@ type Deps struct {
 	HasOpenRouterKey bool
 	MaxBodyBytes     int64
 	OCRName          string
-	GoCV             bool
 }
 
 // NewRouter builds the Gin engine.
@@ -47,7 +46,6 @@ func (d Deps) health(c *gin.Context) {
 	checks := map[string]string{
 		"sqlite":     "ok",
 		"ocr":        "ok",
-		"gocv":       "ok",
 		"typesafe":   "ok",
 		"openrouter": "ok",
 	}
@@ -63,10 +61,6 @@ func (d Deps) health(c *gin.Context) {
 		status = "degraded"
 	} else if d.OCRName != "" {
 		checks["ocr"] = d.OCRName
-	}
-
-	if !d.GoCV {
-		checks["gocv"] = "skipped"
 	}
 
 	if !d.HasAPIKey {

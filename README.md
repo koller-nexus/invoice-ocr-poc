@@ -2,7 +2,7 @@
 
 Proof of concept HTTP API: upload a receipt image, enqueue processing, then poll SQLite-backed results.
 
-OCR is one of **Ollama** (`glm-ocr:latest`), **OpenRouter** vision, or local **Tesseract**. DeepSeek (OpenRouter) optionally extracts line items. TypeSafe Jev judges document type, routing, and risk.
+OCR is **Ollama** (`glm-ocr:latest`) or **OpenRouter** vision. DeepSeek (OpenRouter) optionally extracts line items. TypeSafe Jev judges document type, routing, and risk.
 
 ## Architecture
 
@@ -20,14 +20,13 @@ flowchart LR
   prep --> ocr[OCR engine]
   ocr --> ollama[Ollama]
   ocr --> orVision[OpenRouter vision]
-  ocr --> tess[Tesseract]
   ocr --> parse[extract.Parse]
   parse --> assist[DeepSeek assist]
   assist --> jev[TypeSafe Jev]
   jev --> db
 ```
 
-`OCR_ENGINE` selects one OCR backend (`ollama`, `openrouter`, or `tesseract`). Assist is skipped when `OPENROUTER_API_KEY` is empty.
+`OCR_ENGINE` selects one OCR backend (`ollama` or `openrouter`). Assist is skipped when `OPENROUTER_API_KEY` is empty.
 
 ## Requirements
 
@@ -35,8 +34,6 @@ flowchart LR
 - Ollama with `glm-ocr:latest` (`ollama pull glm-ocr:latest`) when `OCR_ENGINE=ollama`
 - `OPENROUTER_API_KEY` — optional structured extract (and OCR if `OCR_ENGINE=openrouter`)
 - `TYPESAFE_API_KEY` — Jev
-- Tesseract on `PATH` when `OCR_ENGINE=tesseract`
-- Optional: `go build -tags gocv` for OpenCV preprocess
 
 ## Run
 
@@ -48,7 +45,7 @@ go run ./cmd/api
 
 Config is read from `.env` or `configs/.env`.
 
-`OCR_ENGINE=ollama` (example), `openrouter`, or `tesseract`.
+`OCR_ENGINE=ollama` (example) or `openrouter`.
 
 `LOG_FORMAT=text` (default, console) or `json`.
 
@@ -65,7 +62,7 @@ curl -s -X POST http://localhost:8080/api/v1/image/processor \
   -F "image=@./path/to/receipt.png;type=image/png"
 ```
 
-Flow: preprocess → OCR (Ollama, OpenRouter, or Tesseract) → extract / optional DeepSeek → Jev HTTP.
+Flow: preprocess → OCR (Ollama or OpenRouter) → extract / optional DeepSeek → Jev HTTP.
 
 ## Accuracy harness
 

@@ -112,7 +112,6 @@ func run() error {
 		HasOpenRouterKey: cfg.OpenRouterAPIKey != "",
 		MaxBodyBytes:     cfg.MaxUploadBytes,
 		OCRName:          cfg.OCREngine,
-		GoCV:             prep.Available(),
 	})
 
 	srv := &http.Server{

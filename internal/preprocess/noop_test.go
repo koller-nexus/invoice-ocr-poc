@@ -27,8 +27,4 @@ func TestNoopPrepare_Copies(t *testing.T) {
 	if string(raw) != "png" {
 		t.Fatalf("%q", raw)
 	}
-
-	if New().Available() {
-		t.Fatal("noop should not report opencv available")
-	}
 }
