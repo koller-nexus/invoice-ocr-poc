@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/williamkoller/tesseract-poc-go/internal/extract"
+	"github.com/williamkoller/invoice-ocr-poc/internal/extract"
 )
 
 func TestEvaluate_ComposesReviewFlags(t *testing.T) {

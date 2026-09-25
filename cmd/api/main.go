@@ -10,15 +10,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/williamkoller/tesseract-poc-go/internal/config"
-	"github.com/williamkoller/tesseract-poc-go/internal/httpserver"
-	"github.com/williamkoller/tesseract-poc-go/internal/invoice"
-	"github.com/williamkoller/tesseract-poc-go/internal/jev"
-	"github.com/williamkoller/tesseract-poc-go/internal/ocr"
-	"github.com/williamkoller/tesseract-poc-go/internal/openrouter"
-	"github.com/williamkoller/tesseract-poc-go/internal/preprocess"
-	"github.com/williamkoller/tesseract-poc-go/internal/store"
-	"github.com/williamkoller/tesseract-poc-go/internal/worker"
+	"github.com/williamkoller/invoice-ocr-poc/internal/config"
+	"github.com/williamkoller/invoice-ocr-poc/internal/httpserver"
+	"github.com/williamkoller/invoice-ocr-poc/internal/invoice"
+	"github.com/williamkoller/invoice-ocr-poc/internal/jev"
+	"github.com/williamkoller/invoice-ocr-poc/internal/ocr"
+	"github.com/williamkoller/invoice-ocr-poc/internal/openrouter"
+	"github.com/williamkoller/invoice-ocr-poc/internal/preprocess"
+	"github.com/williamkoller/invoice-ocr-poc/internal/store"
+	"github.com/williamkoller/invoice-ocr-poc/internal/worker"
 	"go.uber.org/zap"
 )
 
@@ -97,7 +97,7 @@ func run() error {
 
 	var svc *invoice.Service
 
-	pool := worker.NewPool(cfg.WorkerCount, func(jobCtx context.Context, id string) error {
+	pool := worker.NewPool(cfg.WorkerCount, cfg.JobQueueSize, func(jobCtx context.Context, id string) error {
 		return svc.ProcessJob(jobCtx, id, engine, judge, assist)
 	}, log)
 

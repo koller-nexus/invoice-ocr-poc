@@ -3,7 +3,7 @@ package jev
 import (
 	"testing"
 
-	"github.com/williamkoller/tesseract-poc-go/internal/store"
+	"github.com/williamkoller/invoice-ocr-poc/internal/store"
 )
 
 func TestExplain_Determinants(t *testing.T) {

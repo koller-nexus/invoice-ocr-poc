@@ -15,11 +15,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/williamkoller/tesseract-poc-go/internal/extract"
-	"github.com/williamkoller/tesseract-poc-go/internal/jev"
-	"github.com/williamkoller/tesseract-poc-go/internal/ocr"
-	"github.com/williamkoller/tesseract-poc-go/internal/preprocess"
-	"github.com/williamkoller/tesseract-poc-go/internal/store"
+	"github.com/williamkoller/invoice-ocr-poc/internal/extract"
+	"github.com/williamkoller/invoice-ocr-poc/internal/jev"
+	"github.com/williamkoller/invoice-ocr-poc/internal/ocr"
+	"github.com/williamkoller/invoice-ocr-poc/internal/preprocess"
+	"github.com/williamkoller/invoice-ocr-poc/internal/store"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -37,9 +37,12 @@ var ErrNotFound = errors.New("invoice not found")
 // ErrInvalidImage is returned for rejected uploads.
 var ErrInvalidImage = errors.New("invalid image upload")
 
+// ErrQueueFull is returned when the worker queue cannot accept another job.
+var ErrQueueFull = errors.New("job queue is full")
+
 // Jobs accepts background work.
 type Jobs interface {
-	Enqueue(id string)
+	Enqueue(ctx context.Context, id string) error
 }
 
 // Assistant optionally improves OCR line-item extraction.
@@ -122,7 +125,15 @@ func (s *Service) Enqueue(ctx context.Context, in EnqueueInput) (*store.Invoice,
 		return nil, err
 	}
 
-	s.jobs.Enqueue(id)
+	if err := s.jobs.Enqueue(ctx, id); err != nil {
+		s.rollbackEnqueue(ctx, id, stored)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+
+		return nil, ErrQueueFull
+	}
+
 	s.log.Infow("invoice queued",
 		"step", "enqueue",
 		"invoice_id", id,
@@ -334,6 +345,16 @@ func writeLimited(path string, r io.Reader, maxBytes int64) error {
 	}
 
 	return nil
+}
+
+func (s *Service) rollbackEnqueue(ctx context.Context, id, stored string) {
+	if err := s.store.Delete(ctx, id); err != nil {
+		s.log.Errorw("enqueue rollback delete", "invoice_id", id, "err", err)
+	}
+
+	if err := os.Remove(stored); err != nil && !errors.Is(err, os.ErrNotExist) {
+		s.log.Errorw("enqueue rollback file", "path", stored, "err", err)
+	}
 }
 
 func newID() (string, error) {

@@ -6,7 +6,7 @@ OCR is **Ollama** (`glm-ocr:latest`) or **OpenRouter** vision. DeepSeek (OpenRou
 
 ## Architecture
 
-Upload returns as soon as the file is on disk and the invoice is queued. A worker pool runs preprocess, OCR, optional DeepSeek assist, and Jev. Results stay in SQLite. Logs go to stdout (`zap`).
+Upload returns as soon as the file is on disk and the invoice is queued. A worker pool runs preprocess (resize to 1600px max side, JPEG quality 80), OCR, optional DeepSeek assist, and Jev. Results stay in SQLite. Logs go to stdout (`zap`).
 
 ```mermaid
 flowchart LR
@@ -49,6 +49,8 @@ Config is read from `.env` or `configs/.env`.
 
 `LOG_FORMAT=text` (default, console) or `json`.
 
+`WORKER_COUNT` is the OCR goroutine count (default 2). `JOB_QUEUE_SIZE` is the in-memory job buffer (default 32). `POST /api/v1/image/processor` returns 503 `job queue is full` when the buffer is full; the HTTP handler does not wait for a worker.
+
 ## API
 
 - `GET /health`
@@ -62,7 +64,7 @@ curl -s -X POST http://localhost:8080/api/v1/image/processor \
   -F "image=@./path/to/receipt.png;type=image/png"
 ```
 
-Flow: preprocess → OCR (Ollama or OpenRouter) → extract / optional DeepSeek → Jev HTTP.
+Flow: preprocess (resize/JPEG) → OCR (Ollama or OpenRouter) → extract / optional DeepSeek → Jev HTTP.
 
 ## Accuracy harness
 

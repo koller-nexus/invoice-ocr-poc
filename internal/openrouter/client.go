@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/williamkoller/tesseract-poc-go/internal/extract"
+	"github.com/williamkoller/invoice-ocr-poc/internal/extract"
 	"go.uber.org/zap"
 )
 
@@ -109,8 +109,8 @@ func (c *Client) Assist(ctx context.Context, ocrText string, hint extract.Result
 
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("HTTP-Referer", "https://github.com/williamkoller/tesseract-poc-go")
-	req.Header.Set("X-Title", "tesseract-poc-go")
+	req.Header.Set("HTTP-Referer", "https://github.com/williamkoller/invoice-ocr-poc")
+	req.Header.Set("X-Title", "invoice-ocr-poc")
 
 	c.log.Infow("openrouter.assist.request",
 		"step", "openrouter.assist.request",

@@ -2,19 +2,24 @@ package httpserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/williamkoller/tesseract-poc-go/internal/invoice"
-	"github.com/williamkoller/tesseract-poc-go/internal/store"
+	"github.com/williamkoller/invoice-ocr-poc/internal/invoice"
+	"github.com/williamkoller/invoice-ocr-poc/internal/store"
 )
 
 type nopJobs struct{}
 
-func (nopJobs) Enqueue(string) {}
+func (nopJobs) Enqueue(context.Context, string) error { return nil }
+
+type fullJobs struct{}
+
+func (fullJobs) Enqueue(context.Context, string) error { return invoice.ErrQueueFull }
 
 func TestProcessImage_Accepted(t *testing.T) {
 	t.Parallel()
@@ -72,6 +77,57 @@ func TestProcessImage_Accepted(t *testing.T) {
 
 	if grec.Code != http.StatusOK {
 		t.Fatalf("get %d", grec.Code)
+	}
+}
+
+func TestProcessImage_QueueFull(t *testing.T) {
+	t.Parallel()
+
+	st, err := store.Open(t.Context(), t.TempDir()+"/t.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc := invoice.NewService(st, fullJobs{}, t.TempDir(), 1024*1024, nil, nil)
+	r := NewRouter(Deps{
+		Service:      svc,
+		Store:        st,
+		HasAPIKey:    true,
+		MaxBodyBytes: 1024 * 1024,
+	})
+
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	part, err := w.CreateFormFile("image", "note.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := part.Write([]byte("\x89PNG\r\n\x1a\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/image/processor", &body)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+
+	rows, err := st.List(t.Context(), 20, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rows) != 0 {
+		t.Fatalf("expected rollback, got %d rows", len(rows))
 	}
 }
 

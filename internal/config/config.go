@@ -17,6 +17,7 @@ const (
 	keyUploadDir          = "UPLOAD_DIR"
 	keyMaxUploadBytes     = "MAX_UPLOAD_BYTES"
 	keyWorkerCount        = "WORKER_COUNT"
+	keyJobQueueSize       = "JOB_QUEUE_SIZE"
 	keyTesseractLang      = "TESSERACT_LANG"
 	keyTypeSafeAPIKey     = "TYPESAFE_API_KEY"
 	keyTypeSafeBaseURL    = "TYPESAFE_BASE_URL"
@@ -40,6 +41,7 @@ type Config struct {
 	UploadDir          string
 	MaxUploadBytes     int64
 	WorkerCount        int
+	JobQueueSize       int
 	TesseractLang      string
 	TypeSafeAPIKey     string
 	TypeSafeBaseURL    string
@@ -68,6 +70,7 @@ func Load() (Config, error) {
 		keyUploadDir,
 		keyMaxUploadBytes,
 		keyWorkerCount,
+		keyJobQueueSize,
 		keyTesseractLang,
 		keyTypeSafeAPIKey,
 		keyTypeSafeBaseURL,
@@ -93,6 +96,7 @@ func Load() (Config, error) {
 	v.SetDefault(keyUploadDir, "uploads")
 	v.SetDefault(keyMaxUploadBytes, 8*1024*1024)
 	v.SetDefault(keyWorkerCount, 2)
+	v.SetDefault(keyJobQueueSize, 32)
 	v.SetDefault(keyTesseractLang, "por+eng")
 	v.SetDefault(keyTypeSafeBaseURL, "https://api.typesafe.ai")
 	v.SetDefault(keyTypeSafeTimeout, 30*time.Second)
@@ -120,6 +124,7 @@ func Load() (Config, error) {
 		UploadDir:          strings.TrimSpace(v.GetString(keyUploadDir)),
 		MaxUploadBytes:     v.GetInt64(keyMaxUploadBytes),
 		WorkerCount:        v.GetInt(keyWorkerCount),
+		JobQueueSize:       v.GetInt(keyJobQueueSize),
 		TesseractLang:      strings.TrimSpace(v.GetString(keyTesseractLang)),
 		TypeSafeAPIKey:     resolveAPIKey(fileKey, fileHasKey, v.GetString(keyTypeSafeAPIKey)),
 		TypeSafeBaseURL:    strings.TrimSpace(v.GetString(keyTypeSafeBaseURL)),
@@ -142,6 +147,10 @@ func Load() (Config, error) {
 
 	if cfg.WorkerCount <= 0 {
 		return Config{}, fmt.Errorf("invalid WORKER_COUNT: %d", cfg.WorkerCount)
+	}
+
+	if cfg.JobQueueSize <= 0 {
+		return Config{}, fmt.Errorf("invalid JOB_QUEUE_SIZE: %d", cfg.JobQueueSize)
 	}
 
 	if cfg.TypeSafeTimeout <= 0 {

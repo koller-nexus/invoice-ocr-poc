@@ -120,8 +120,8 @@ func (o *OpenRouter) Recognize(ctx context.Context, imagePath string) (Result, e
 
 	req.Header.Set("Authorization", "Bearer "+o.apiKey)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("HTTP-Referer", "https://github.com/williamkoller/tesseract-poc-go")
-	req.Header.Set("X-Title", "tesseract-poc-go")
+	req.Header.Set("HTTP-Referer", "https://github.com/williamkoller/invoice-ocr-poc")
+	req.Header.Set("X-Title", "invoice-ocr-poc")
 
 	o.log.Infow("openrouter.ocr.request",
 		"step", "openrouter.ocr.request",

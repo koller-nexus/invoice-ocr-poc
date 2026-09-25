@@ -1,4 +1,4 @@
-// Package preprocess copies the upload to a stable path before OCR.
+// Package preprocess writes a working image for OCR (resize and JPEG).
 package preprocess
 
 import "context"

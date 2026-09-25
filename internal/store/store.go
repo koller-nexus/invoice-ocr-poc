@@ -71,6 +71,15 @@ func (s *Store) Update(ctx context.Context, inv *Invoice) error {
 	return nil
 }
 
+// Delete removes an invoice by id.
+func (s *Store) Delete(ctx context.Context, id string) error {
+	if err := s.db.WithContext(ctx).Delete(&Invoice{}, "id = ?", id).Error; err != nil {
+		return fmt.Errorf("delete invoice: %w", err)
+	}
+
+	return nil
+}
+
 // Get loads one invoice by id.
 func (s *Store) Get(ctx context.Context, id string) (*Invoice, error) {
 	var inv Invoice

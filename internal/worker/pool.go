@@ -3,10 +3,14 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"go.uber.org/zap"
 )
+
+// ErrQueueFull is returned when the job channel cannot accept another id.
+var ErrQueueFull = errors.New("job queue is full")
 
 // Handler processes one job id.
 type Handler func(ctx context.Context, id string) error
@@ -20,10 +24,14 @@ type Pool struct {
 	wg      sync.WaitGroup
 }
 
-// NewPool builds a pool with workerCount goroutines.
-func NewPool(workerCount int, handler Handler, log *zap.SugaredLogger) *Pool {
+// NewPool builds a pool with workerCount goroutines and a buffered job queue.
+func NewPool(workerCount, queueSize int, handler Handler, log *zap.SugaredLogger) *Pool {
 	if workerCount < 1 {
 		workerCount = 1
+	}
+
+	if queueSize < 1 {
+		queueSize = 1
 	}
 
 	if log == nil {
@@ -31,7 +39,7 @@ func NewPool(workerCount int, handler Handler, log *zap.SugaredLogger) *Pool {
 	}
 
 	return &Pool{
-		jobs:    make(chan string, workerCount),
+		jobs:    make(chan string, queueSize),
 		handler: handler,
 		log:     log,
 		count:   workerCount,
@@ -66,11 +74,21 @@ func (p *Pool) loop(ctx context.Context) {
 	}
 }
 
-// Enqueue submits a job id. The unbuffered channel applies backpressure
-// instead of spawning a goroutine per upload.
-func (p *Pool) Enqueue(id string) {
-	p.log.Infow("job.accepted", "step", "job.accepted", "invoice_id", id)
-	p.jobs <- id
+// Enqueue submits a job id without waiting for a worker.
+func (p *Pool) Enqueue(ctx context.Context, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case p.jobs <- id:
+		p.log.Infow("job.accepted", "step", "job.accepted", "invoice_id", id)
+		return nil
+	default:
+		return ErrQueueFull
+	}
 }
 
 // Shutdown closes the job channel and waits for workers.

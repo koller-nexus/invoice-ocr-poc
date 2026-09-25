@@ -3,7 +3,7 @@ package jev
 import (
 	"fmt"
 
-	"github.com/williamkoller/tesseract-poc-go/internal/store"
+	"github.com/williamkoller/invoice-ocr-poc/internal/store"
 )
 
 // Analysis is a read-only explanation of a stored Jev verdict.

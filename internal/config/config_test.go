@@ -31,6 +31,20 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.LogFormat != "text" {
 		t.Fatalf("log format %s", cfg.LogFormat)
 	}
+
+	if cfg.JobQueueSize != 32 {
+		t.Fatalf("queue size %d", cfg.JobQueueSize)
+	}
+}
+
+func TestLoad_InvalidJobQueueSize(t *testing.T) {
+	t.Chdir(t.TempDir())
+	clearConfigEnv(t)
+	t.Setenv(keyJobQueueSize, "0")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error")
+	}
 }
 
 func TestLoad_InvalidWorkerCount(t *testing.T) {
@@ -97,6 +111,7 @@ func clearConfigEnv(t *testing.T) {
 		keyUploadDir,
 		keyMaxUploadBytes,
 		keyWorkerCount,
+		keyJobQueueSize,
 		keyTesseractLang,
 		keyTypeSafeAPIKey,
 		keyTypeSafeBaseURL,

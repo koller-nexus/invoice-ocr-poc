@@ -7,10 +7,10 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/williamkoller/tesseract-poc-go/internal/invoice"
-	"github.com/williamkoller/tesseract-poc-go/internal/jev"
-	"github.com/williamkoller/tesseract-poc-go/internal/ocr"
-	"github.com/williamkoller/tesseract-poc-go/internal/store"
+	"github.com/williamkoller/invoice-ocr-poc/internal/invoice"
+	"github.com/williamkoller/invoice-ocr-poc/internal/jev"
+	"github.com/williamkoller/invoice-ocr-poc/internal/ocr"
+	"github.com/williamkoller/invoice-ocr-poc/internal/store"
 )
 
 // Deps are handler dependencies.
@@ -105,6 +105,11 @@ func (d Deps) processImage(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, invoice.ErrInvalidImage) {
 			writeError(c, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		if errors.Is(err, invoice.ErrQueueFull) {
+			writeError(c, http.StatusServiceUnavailable, err.Error())
 			return
 		}
 

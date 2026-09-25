@@ -3,9 +3,9 @@ package httpserver
 import (
 	"encoding/json"
 
-	"github.com/williamkoller/tesseract-poc-go/internal/extract"
-	"github.com/williamkoller/tesseract-poc-go/internal/jev"
-	"github.com/williamkoller/tesseract-poc-go/internal/store"
+	"github.com/williamkoller/invoice-ocr-poc/internal/extract"
+	"github.com/williamkoller/invoice-ocr-poc/internal/jev"
+	"github.com/williamkoller/invoice-ocr-poc/internal/store"
 )
 
 type enqueueResponse struct {
